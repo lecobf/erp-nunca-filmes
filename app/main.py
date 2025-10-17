@@ -21,6 +21,60 @@ else:
     load_dotenv(dotenv_path=env_path)
     print(f"[ENV] Variáveis carregadas de: {env_path}")
 
+# debug_db_url.py  (peça: cole este bloco em main.py ou settings.py logo após carregar envs)
+import os
+from sqlalchemy.engine import make_url
+
+def mask_password(pw: str) -> str:
+    if not pw:
+        return ""
+    if len(pw) <= 4:
+        return "*" * len(pw)
+    return pw[:2] + ("*" * (len(pw) - 4)) + pw[-2:]
+
+def get_db_url_info(raw_url: str):
+    try:
+        url = make_url(raw_url)
+    except Exception:
+        return None
+    return {
+        "drivername": url.drivername,
+        "username": url.username,
+        "password": url.password,
+        "host": url.host,
+        "port": url.port,
+        "database": url.database,
+        "query": dict(url.query) if url.query else {}
+    }
+
+# --- start debug block ---
+raw_db = os.getenv("DATABASE_URL", "")
+info = get_db_url_info(raw_db)
+
+if info is None:
+    print("[DB-DEBUG] DATABASE_URL is missing or could not be parsed.")
+else:
+    masked_pw = info["password"]
+    # Rebuild a masked URL for safe logging
+    host_part = info["host"] or ""
+    port_part = f":{info['port']}" if info.get("port") else ""
+    masked_url = f"{info['drivername']}://{info['username']}:{masked_pw}@{host_part}{port_part}/{info['database']}"
+
+    print(f"[DB-DEBUG] DB driver: {info['drivername']}")
+    print(f"[DB-DEBUG] DB user: {info['username']}")
+    print(f"[DB-DEBUG] DB host: {host_part}{port_part}")
+    print(f"[DB-DEBUG] DB name: {info['database']}")
+    print(f"[DB-DEBUG] DB url (masked): {masked_url}")
+
+    # Optional: print full URL only if explicitly allowed via env var
+    if os.getenv("LOG_FULL_DB_URL", "false").lower() in ("1", "true", "yes"):
+        # WARNING: this will show the password in plaintext in logs
+        print(f"[DB-DEBUG] DB url (FULL, DANGER): {raw_db}")
+    else:
+        print("[DB-DEBUG] Full DB URL logging is disabled. Set LOG_FULL_DB_URL=true (temporary) to enable.")
+# --- end debug block ---
+
+
 # ============================================================
 # 🔹 Importações internas
 # ============================================================
