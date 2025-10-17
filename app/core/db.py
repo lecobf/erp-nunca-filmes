@@ -14,9 +14,15 @@ if DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
     os.makedirs(os.path.dirname(DATABASE_URL.replace("sqlite:///", "")), exist_ok=True)
 
+# Força o uso do driver psycopg3 em qualquer caso
+from sqlalchemy.engine import make_url
+
+# Garante que o esquema (dialeto) correto será usado
+url = str(make_url(DATABASE_URL).set(drivername="postgresql+psycopg"))
+
 # Cria engine compatível com qualquer SGBD
 engine = create_engine(
-    DATABASE_URL.replace("postgres://", "postgresql+psycopg://"),
+    url,
     connect_args=connect_args,
     pool_pre_ping=True,
     future=True,
