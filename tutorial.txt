@@ -1,0 +1,14 @@
+RODAR O SERVIDOR DE SERVICOS NA PASTA ONDE ESTA O ARQUIVO PY:
+
+> cd F:\Dropbox\NUNCA_FILMES\PJ\erp
+> uvicorn main:app --reload
+
+RODAR o FRONT END da pasta nunca-front end:
+
+> cd F:\Dropbox\NUNCA_FILMES\PJ\erp\nunca-frontend
+> npm run dev
+
+
+PRAGMA table_info(clientes);
+PRAGMA table_info(servicos);
+PRAGMA table_info(pagamentos);

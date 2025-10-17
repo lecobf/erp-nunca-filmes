@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Helpers */
+.btn-primary { @apply bg-blue-600 text-white px-4 py-2 rounded; }
+.btn-gray { @apply bg-gray-200 px-4 py-2 rounded; }
+.table-header th { @apply text-xs font-semibold uppercase tracking-wide text-gray-600; }
+.table-row td { @apply text-sm; }
+.filter-row { @apply flex flex-wrap gap-3 items-end; }
+.filter-field { @apply flex flex-col; }

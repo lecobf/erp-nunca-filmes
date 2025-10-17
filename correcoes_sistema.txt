@@ -1,0 +1,16 @@
+Equipamentos falta:
+- busca por nome de equipamento por substring
+- falta poder preencher categoria de equipamento e quantidade no form e na modal de edicao
+- organizar posicionamento dos inputs para ficarem alinhados
+- falta eibir a categora do equipamento no grid ( como primeira coluna)
+- nao precisa exibir o ID
+- falta paginacao que nem a tabela de servicos
+
+
+Clientes:
+Falta formulario de insercao com os campos de Nome, CPF/CNPJ email e telefone 
+Falta botoes de acao de excluir e editar que nem na tabela de servicos
+Nao precisa exibir id na tabela
+na modal e no grid deve constar as informacoes de nome, CPF/CNPJ, email e telefone
+- falta paginacao que nem a tabela de servicos
+

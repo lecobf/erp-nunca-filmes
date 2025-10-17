@@ -1,0 +1,79 @@
+# ============================================================
+# 🎬 ERP NUNCA FILMES - Docker Compose (Produção)
+# Backend (FastAPI) + Frontend (Vite build) + PostgreSQL
+# ============================================================
+
+version: "3.9"
+
+services:
+  # -----------------------------
+  # 💾 Banco de dados PostgreSQL
+  # -----------------------------
+  db:
+    image: postgres:16
+    container_name: erp_db_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-erp_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erp_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-erp_nunca}
+    volumes:
+      - pg_data_prod:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # -----------------------------
+  # ⚙️ Backend FastAPI (Gunicorn)
+  # -----------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: erp_backend_prod
+    depends_on:
+      - db
+    env_file:
+      - ./app/.env.production
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://erp_user:erp_pass@db:5432/erp_nunca}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://nuncafilmes.duckdns.org,https://nuncafilmes.onrender.com}
+      ENV: production
+      DEBUG: "false"
+    ports:
+      - "8000:8000"
+    command: >
+      gunicorn -k uvicorn.workers.UvicornWorker app.main:app
+      --bind 0.0.0.0:8000
+      --workers 4
+      --timeout 120
+    restart: always
+
+  # -----------------------------
+  # 🎨 Frontend (Build estático)
+  # -----------------------------
+  frontend:
+    build:
+      context: ./nunca-frontend
+      dockerfile: Dockerfile
+    container_name: erp_frontend_prod
+    depends_on:
+      - backend
+    env_file:
+      - ./nunca-frontend/.env.production
+    environment:
+      - VITE_API_BASE=${VITE_API_BASE:-http://backend:8000}
+      - VITE_ENV=production
+    volumes:
+      - ./nunca-frontend:/app
+      - /app/node_modules
+    command: >
+      sh -c "npm ci && npm run build && npx serve -s dist -l 5173"
+    ports:
+      - "5173:5173"
+    restart: always
+
+# -----------------------------
+# 🗃️ Volumes persistentes
+# -----------------------------
+volumes:
+  pg_data_prod:

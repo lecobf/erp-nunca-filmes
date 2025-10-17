@@ -1,0 +1,77 @@
+# ============================================================
+# 🎬 ERP NUNCA FILMES - Docker Compose
+# Backend (FastAPI) + Frontend (Vite) + PostgreSQL
+# ============================================================
+
+version: "3.9"
+
+services:
+  # -----------------------------
+  # 💾 Banco de dados PostgreSQL
+  # -----------------------------
+  db:
+    image: postgres:16
+    container_name: erp_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: erp_user
+      POSTGRES_PASSWORD: erp_pass
+      POSTGRES_DB: erp_nunca
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  # -----------------------------
+  # ⚙️ Backend FastAPI
+  # -----------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: erp_backend
+    depends_on:
+      - db
+    env_file:
+      - ./app/.env.devlocal
+    environment:
+      DATABASE_URL: postgresql+psycopg://erp_user:erp_pass@db:5432/erp_nunca
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://nuncafilmes.duckdns.org:5173
+      ENV: devlocal
+      DEBUG: "true"
+    volumes:
+      - ./app:/app/app
+    ports:
+      - "8000:8000"
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+
+  # -----------------------------
+  # 🎨 Frontend React + Vite
+  # -----------------------------
+  frontend:
+    build:
+      context: ./nunca-frontend
+    container_name: erp_frontend
+    environment:
+      - VITE_API_BASE=http://localhost:8000
+      - VITE_ENV=devlocal
+      - VITE_DEBUG=true
+    volumes:
+      - ./nunca-frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    command: >
+      npm run dev
+    depends_on:
+      - backend
+
+# -----------------------------
+# 🗃️ Volumes persistentes
+# -----------------------------
+volumes:
+  pg_data:

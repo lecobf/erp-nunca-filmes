@@ -1,0 +1,23 @@
+🧩 Opção 1 – Local (sem .env)
+
+Nada a fazer:
+O frontend usa http://127.0.0.1:8000 como backend, ideal para desenvolvimento local.
+
+🌐 Opção 2 – Rede (intranet)
+
+Crie um arquivo .env na raiz do projeto com:
+
+VITE_BACKEND_IP=192.168.0.10
+VITE_BACKEND_PORT=8000
+
+
+Substitua 192.168.0.10 pelo IP real da máquina que roda o backend FastAPI.
+
+Então rode o frontend:
+
+npm run dev
+
+
+E acesse de outro computador:
+
+http://192.168.0.10:5173
