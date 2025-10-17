@@ -16,7 +16,7 @@ if DATABASE_URL.startswith("sqlite"):
 
 # Cria engine compatível com qualquer SGBD
 engine = create_engine(
-    DATABASE_URL,
+    DATABASE_URL.replace("postgres://", "postgresql+psycopg://"),
     connect_args=connect_args,
     pool_pre_ping=True,
     future=True,
