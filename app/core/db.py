@@ -20,6 +20,9 @@ from sqlalchemy.engine import make_url
 # Garante que o esquema (dialeto) correto será usado
 url = str(make_url(DATABASE_URL).set(drivername="postgresql+psycopg"))
 
+
+connect_args = {"sslmode": "require"}
+
 # Cria engine compatível com qualquer SGBD
 engine = create_engine(
     url,
