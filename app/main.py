@@ -14,9 +14,12 @@ multiprocessing.freeze_support()
 # ============================================================
 # 🔹 Carrega variáveis de ambiente (.env)
 # ============================================================
-env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
-load_dotenv(dotenv_path=env_path)
-print(f"[ENV] Variáveis carregadas de: {env_path}")
+if os.getenv("RENDER", "false").lower() in ("true", "1", "yes"):
+    print("[ENV] Render environment detected — skipping .env load")
+else:
+    env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+    load_dotenv(dotenv_path=env_path)
+    print(f"[ENV] Variáveis carregadas de: {env_path}")
 
 # ============================================================
 # 🔹 Importações internas
