@@ -10,7 +10,7 @@ uvicorn[standard]==0.30.6
 # --- Banco de dados / ORM ---
 SQLAlchemy==2.0.36
 alembic==1.13.3
-psycopg[binary]==3.2.3  # Driver PostgreSQL moderno
+psycopg[binary]==3.2.3  # Driver PostgreSQL moderno (Render/Neon compatível)
 sqlite-utils==3.37  # Utilitário útil em dev/testes
 
 # --- Validação e configuração ---
@@ -26,6 +26,8 @@ cryptography==43.0.3
 requests==2.32.3
 python-multipart==0.0.9
 typing-extensions==4.12.2
+
+
 
 # --- Logs e monitoramento ---
 loguru==0.7.3

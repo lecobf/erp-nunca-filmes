@@ -1,29 +1,33 @@
+# app/core/db.py
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.engine import make_url
 from app.core.settings import settings
 
 # ============================================================
-# 🔹 Configuração do SQLAlchemy dinâmica (SQLite ou Postgres)
+# 🔹 Configuração dinâmica do SQLAlchemy
 # ============================================================
 DATABASE_URL = settings.DATABASE_URL
-
 connect_args = {}
+
+# --- SQLite local ---
 if DATABASE_URL.startswith("sqlite"):
-    # Necessário para evitar erro de threads no SQLite
     connect_args = {"check_same_thread": False}
     os.makedirs(os.path.dirname(DATABASE_URL.replace("sqlite:///", "")), exist_ok=True)
+    url = DATABASE_URL
+else:
+    # --- PostgreSQL (Render / Neon / etc.) ---
+    url_obj = make_url(DATABASE_URL)
+    # Garante que o driver psycopg3 será usado (novo padrão)
+    if not url_obj.drivername.startswith("postgresql+psycopg"):
+        url_obj = url_obj.set(drivername="postgresql+psycopg")
+    url = str(url_obj)
+    connect_args = {"sslmode": "require"}
 
-# Força o uso do driver psycopg3 em qualquer caso
-from sqlalchemy.engine import make_url
-
-# Garante que o esquema (dialeto) correto será usado
-url = str(make_url(DATABASE_URL).set(drivername="postgresql+psycopg"))
-
-
-connect_args = {"sslmode": "require"}
-
-# Cria engine compatível com qualquer SGBD
+# ============================================================
+# 🔹 Criação da Engine
+# ============================================================
 engine = create_engine(
     url,
     connect_args=connect_args,
@@ -40,4 +44,4 @@ Base = declarative_base()
 if DATABASE_URL.startswith("sqlite"):
     print(f"[DATABASE] Usando SQLite local: {DATABASE_URL}")
 else:
-    print(f"[DATABASE] Conectado ao PostgreSQL: {DATABASE_URL}")
+    print(f"[DATABASE] Conectado ao PostgreSQL: {url}")

@@ -135,7 +135,7 @@ app.add_middleware(
 # ============================================================
 # 🔹 Inicialização do banco de dados
 # ============================================================
-print("[INIT] Criando/verificando tabelas no banco de dados...")
+print(f"[INIT] Criando/verificando tabelas no banco de dados em: {settings.DATABASE_URL}")
 Base.metadata.create_all(bind=engine)
 
 # ============================================================

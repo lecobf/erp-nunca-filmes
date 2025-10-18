@@ -10,14 +10,9 @@ class Settings(BaseModel):
     """
 
     # ============================================================
-    # 🔹 Caminho do banco de dados
+    # 🔹 Banco de Dados — prioridade para variável de ambiente
     # ============================================================
-    # Permite definir o caminho via variável de ambiente ERP_DB_PATH.
-    # Se não estiver definida, usa o caminho padrão.
-    # Exemplo de configuração:
-    #   Linux/macOS: export ERP_DB_PATH="/srv/dropbox/nunca_filmes/pj/erp/dados/nunca.db"
-    #   Windows PowerShell: setx ERP_DB_PATH "F:\Dropbox\NUNCA_FILMES\PJ\erp\dados\nunca.db"
-
+    DATABASE_URL: str = os.getenv("DATABASE_URL")
     DB_PATH: str = os.getenv(
         "ERP_DB_PATH",
         r"F:\Dropbox\NUNCA_FILMES\PJ\erp\dados\nunca.db"
@@ -25,15 +20,16 @@ class Settings(BaseModel):
         else "/srv/dropbox/nunca_filmes/pj/erp/dados/nunca.db",
     )
 
-    # ============================================================
-    # 🔹 URL de conexão SQLAlchemy
-    # ============================================================
-    DATABASE_URL: str = f"sqlite:///{DB_PATH}"
+    # Se DATABASE_URL não estiver definida, usa SQLite local (modo dev)
+    if not DATABASE_URL:
+        DATABASE_URL = f"sqlite:///{DB_PATH}"
 
     # ============================================================
     # 🔹 Configuração de CORS
     # ============================================================
-    CORS_ORIGINS: list[str] = ["*"]
+    CORS_ORIGINS: list[str] = os.getenv(
+        "CORS_ORIGINS", "https://erp-frontend.onrender.com,https://*.onrender.com"
+    ).split(",")
 
 
 @lru_cache
@@ -42,5 +38,11 @@ def get_settings() -> Settings:
     Retorna as configurações de forma cacheada (singleton).
     """
     settings = Settings()
-    print(f"[CONFIG] Banco de dados definido em: {settings.DB_PATH}")
+
+    print(f"[CONFIG] Database URL ativo: {settings.DATABASE_URL}")
+    if settings.DATABASE_URL.startswith("sqlite"):
+        print(f"[CONFIG] Usando SQLite local: {settings.DB_PATH}")
+    else:
+        print("[CONFIG] Usando PostgreSQL remoto (Render ou Neon)")
+
     return settings
