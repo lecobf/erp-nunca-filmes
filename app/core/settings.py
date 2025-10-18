@@ -17,9 +17,10 @@ class Settings(BaseModel):
     
     if "render" in os.getenv("RENDER", "").lower() or os.getenv("RENDER_EXTERNAL_HOSTNAME"):
     print("[ENV] Render environment detected — skipping .env load")
-    else:
+else:
     from dotenv import load_dotenv
     load_dotenv()
+
 
 
     # ============================================================
