@@ -1,6 +1,7 @@
 # app/core/settings.py
 import os
-from typing import List
+import json
+from typing import List, Union
 from pydantic_settings import BaseSettings
 from pydantic import Field
 
@@ -12,7 +13,7 @@ class Settings(BaseSettings):
     """
 
     # ============================================================
-    # 🔹 Ambiente e informações básicas
+    # 🔹 Ambiente
     # ============================================================
     ENVIRONMENT: str = Field(default=os.getenv("ENVIRONMENT", "devlocal"))
     APP_NAME: str = Field(default=os.getenv("APP_NAME", "ERP Backend"))
@@ -26,36 +27,37 @@ class Settings(BaseSettings):
     )
 
     # ============================================================
-    # 🔹 CORS
+    # 🔹 CORS (pode vir como string, lista ou vazio)
     # ============================================================
-    # Render pode enviar CORS_ORIGINS vazio ou como string simples
-    @staticmethod
-    def _parse_cors_origins() -> List[str]:
-        raw = os.getenv("CORS_ORIGINS", "")
-        if not raw:
-            return [
-                "https://erp-frontend.onrender.com",
-                "https://*.onrender.com",
-            ]
-        # Permite JSON, lista ou string separada por vírgulas
-        try:
-            import json
-            parsed = json.loads(raw)
-            if isinstance(parsed, list):
-                return [o.strip() for o in parsed if o.strip()]
-        except Exception:
-            pass
-        # fallback: string separada por vírgulas
-        return [o.strip() for o in raw.split(",") if o.strip()]
-
-    CORS_ORIGINS: List[str] = Field(default_factory=_parse_cors_origins)
+    CORS_ORIGINS: Union[str, List[str], None] = Field(default=None)
 
     # ============================================================
-    # 🔹 Inicialização e logs
+    # 🔹 Inicialização e parsing manual
     # ============================================================
     def __init__(self, **data):
         super().__init__(**data)
 
+        raw_cors = os.getenv("CORS_ORIGINS", "")
+        parsed: List[str] = []
+
+        if raw_cors:
+            try:
+                val = json.loads(raw_cors)
+                if isinstance(val, list):
+                    parsed = [v.strip() for v in val if v.strip()]
+                elif isinstance(val, str):
+                    parsed = [v.strip() for v in val.split(",") if v.strip()]
+            except Exception:
+                parsed = [v.strip() for v in raw_cors.split(",") if v.strip()]
+        else:
+            parsed = [
+                "https://erp-frontend.onrender.com",
+                "https://*.onrender.com",
+            ]
+
+        self.CORS_ORIGINS = parsed
+
+        # Logs
         print(f"[SETTINGS] Ambiente: {self.ENVIRONMENT}")
         print(f"[SETTINGS] APP_NAME: {self.APP_NAME}")
         print(f"[SETTINGS] DEBUG: {self.DEBUG}")
@@ -64,6 +66,6 @@ class Settings(BaseSettings):
 
 
 # ============================================================
-# Singleton (instância única)
+# Singleton
 # ============================================================
 settings = Settings()
