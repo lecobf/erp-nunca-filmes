@@ -15,7 +15,7 @@ class Settings(BaseModel):
         "sqlite:///./app/dados/nunca.db"  # fallback local
     )
     
-    if "render" in os.getenv("RENDER", "").lower() or os.getenv("RENDER_EXTERNAL_HOSTNAME"):
+if "render" in os.getenv("RENDER", "").lower() or os.getenv("RENDER_EXTERNAL_HOSTNAME"):
     print("[ENV] Render environment detected — skipping .env load")
 else:
     from dotenv import load_dotenv
