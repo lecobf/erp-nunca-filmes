@@ -8,7 +8,7 @@ from pydantic import Field
 class Settings(BaseSettings):
     """
     Configurações globais do ERP.
-    Compatível com Render e ambientes locais.
+    Compatível com Pydantic 2.x e Render.
     """
 
     # ============================================================
@@ -26,19 +26,29 @@ class Settings(BaseSettings):
     )
 
     # ============================================================
-    # 🔹 Configuração de CORS
+    # 🔹 CORS
     # ============================================================
-    # Render envia a variável CORS_ORIGINS como uma string separada por vírgulas.
-    CORS_ORIGINS: List[str] = Field(
-        default_factory=lambda: [
-            origin.strip()
-            for origin in os.getenv(
-                "CORS_ORIGINS",
-                "https://erp-frontend.onrender.com,https://*.onrender.com"
-            ).split(",")
-            if origin.strip()
-        ]
-    )
+    # Render pode enviar CORS_ORIGINS vazio ou como string simples
+    @staticmethod
+    def _parse_cors_origins() -> List[str]:
+        raw = os.getenv("CORS_ORIGINS", "")
+        if not raw:
+            return [
+                "https://erp-frontend.onrender.com",
+                "https://*.onrender.com",
+            ]
+        # Permite JSON, lista ou string separada por vírgulas
+        try:
+            import json
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [o.strip() for o in parsed if o.strip()]
+        except Exception:
+            pass
+        # fallback: string separada por vírgulas
+        return [o.strip() for o in raw.split(",") if o.strip()]
+
+    CORS_ORIGINS: List[str] = Field(default_factory=_parse_cors_origins)
 
     # ============================================================
     # 🔹 Inicialização e logs
