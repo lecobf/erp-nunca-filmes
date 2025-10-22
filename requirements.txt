@@ -10,8 +10,12 @@ uvicorn[standard]==0.30.6
 # --- Banco de dados / ORM ---
 SQLAlchemy==2.0.36
 alembic==1.13.3
-psycopg[binary]==3.2.3  # Driver PostgreSQL moderno (Render/Neon compatível)
-sqlite-utils==3.37  # Utilitário útil em dev/testes
+
+# 🔹 Drivers PostgreSQL (com fallback automático)
+psycopg[binary]==3.2.3      # Driver PostgreSQL moderno (Render/Neon compatível)
+psycopg2-binary==2.9.9      # Fallback legado — mais estável em alguns ambientes (ex: Python 3.13)
+
+sqlite-utils==3.37          # Utilitário útil em dev/testes
 
 # --- Validação e configuração ---
 pydantic==2.9.2
@@ -26,8 +30,6 @@ cryptography==43.0.3
 requests==2.32.3
 python-multipart==0.0.9
 typing-extensions==4.12.2
-
-
 
 # --- Logs e monitoramento ---
 loguru==0.7.3
@@ -45,8 +47,8 @@ gunicorn==23.0.0
 
 # ============================================================
 # Observações:
+# - Agora inclui fallback: psycopg → psycopg2
 # - psycopg[binary] é usado no Render (não requer compilação)
-# - alembic controla versões do schema (migrations)
-# - python-dotenv e pydantic-settings para .env dinâmico
-# - loguru melhora logs de produção
+# - pydantic-settings e dotenv para ambientes dinâmicos
+# - loguru para logs avançados em produçãoo
 # ============================================================

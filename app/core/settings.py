@@ -58,10 +58,27 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: Union[str, List[str], None] = Field(default=None)
 
-    # Inicialização e parsing manual
     def __init__(self, **data):
         super().__init__(**data)
 
+        # ============================================================
+        # 🔍 Detecta driver e aplica fallback psycopg → psycopg2
+        # ============================================================
+        if self.DATABASE_URL.startswith("postgresql://"):
+            # força psycopg
+            self.DATABASE_URL = self.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://")
+
+        elif self.DATABASE_URL.startswith("postgresql+psycopg://"):
+            try:
+                import psycopg
+                print("[DB-DEBUG] Driver psycopg detectado com sucesso ✅")
+            except ImportError:
+                print("[DB-DEBUG] psycopg não encontrado ❌ — aplicando fallback para psycopg2")
+                self.DATABASE_URL = self.DATABASE_URL.replace("postgresql+psycopg://", "postgresql+psycopg2://")
+
+        # ============================================================
+        # 🔹 Processamento das origens CORS
+        # ============================================================
         raw_cors = os.getenv("CORS_ORIGINS", "")
         parsed: List[str] = []
 
@@ -102,7 +119,9 @@ class Settings(BaseSettings):
         except Exception as e:
             print(f"[DB-DEBUG] Falha ao inspecionar DATABASE_URL: {e}")
 
-        # Logs gerais
+        # ============================================================
+        # 🔹 Logs gerais
+        # ============================================================
         print(f"[SETTINGS] Ambiente: {self.ENVIRONMENT}")
         print(f"[SETTINGS] APP_NAME: {self.APP_NAME}")
         print(f"[SETTINGS] DEBUG: {self.DEBUG}")
