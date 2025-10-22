@@ -1,39 +1,64 @@
-# app/core/settings.py
 import os
 import json
 from typing import List, Union
 from pydantic_settings import BaseSettings
 from pydantic import Field
+from pathlib import Path
+from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 
+# ============================================================
+# 🔹 Carregamento de variáveis de ambiente
+# ============================================================
+def load_environment():
+    """Carrega o arquivo .env da raiz do projeto, caso exista."""
+    base_dir = Path(__file__).resolve().parent.parent  # app/core → app → erp/
+    env_path = base_dir / ".env"
+
+    # Detecta Render automaticamente
+    if os.getenv("RENDER", None):
+        print("[ENV] Render environment detected — skipping .env load")
+        return
+
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+        print(f"[ENV] Variáveis carregadas de: {env_path}")
+    else:
+        print(f"[ENV] Aviso: .env não encontrado em {env_path}")
+
+
+load_environment()
+
+
+# ============================================================
+# 🔹 Classe principal de configurações
+# ============================================================
 class Settings(BaseSettings):
     """
     Configurações globais do ERP.
     Compatível com Pydantic 2.x e Render.
     """
 
-    # ============================================================
-    # 🔹 Ambiente
-    # ============================================================
+    # Ambiente
     ENVIRONMENT: str = Field(default=os.getenv("ENVIRONMENT", "devlocal"))
     APP_NAME: str = Field(default=os.getenv("APP_NAME", "ERP Backend"))
     DEBUG: bool = Field(default=os.getenv("DEBUG", "false").lower() == "true")
 
-    # ============================================================
-    # 🔹 Banco de dados
-    # ============================================================
+    # Banco de dados
     DATABASE_URL: str = Field(
         default=os.getenv("DATABASE_URL", "sqlite:///./erp_local.db")
     )
 
-    # ============================================================
-    # 🔹 CORS (pode vir como string, lista ou vazio)
-    # ============================================================
+    # Opção para mostrar senha completa no log
+    LOG_FULL_DB_URL: bool = Field(
+        default=os.getenv("LOG_FULL_DB_URL", "false").lower() == "true"
+    )
+
+    # CORS
     CORS_ORIGINS: Union[str, List[str], None] = Field(default=None)
 
-    # ============================================================
-    # 🔹 Inicialização e parsing manual
-    # ============================================================
+    # Inicialização e parsing manual
     def __init__(self, **data):
         super().__init__(**data)
 
@@ -57,7 +82,27 @@ class Settings(BaseSettings):
 
         self.CORS_ORIGINS = parsed
 
-        # Logs
+        # ============================================================
+        # 🧩 DEBUG DETALHADO DE CONEXÃO COM O BANCO
+        # ============================================================
+        try:
+            parsed_url = urlparse(self.DATABASE_URL)
+            print("[DB-DEBUG] ====== DEBUG DETALHADO DO BANCO ======")
+            print(f"[DB-DEBUG] URL COMPLETA: {self.DATABASE_URL}")
+            print(f"[DB-DEBUG] Driver: {parsed_url.scheme}")
+            print(f"[DB-DEBUG] Usuário: {parsed_url.username}")
+            if self.LOG_FULL_DB_URL:
+                print(f"[DB-DEBUG] Senha: {parsed_url.password}")
+            else:
+                print("[DB-DEBUG] Senha: *** (oculta)")
+            print(f"[DB-DEBUG] Host: {parsed_url.hostname}")
+            print(f"[DB-DEBUG] Porta: {parsed_url.port}")
+            print(f"[DB-DEBUG] Banco: {parsed_url.path.lstrip('/')}")
+            print("[DB-DEBUG] ========================================")
+        except Exception as e:
+            print(f"[DB-DEBUG] Falha ao inspecionar DATABASE_URL: {e}")
+
+        # Logs gerais
         print(f"[SETTINGS] Ambiente: {self.ENVIRONMENT}")
         print(f"[SETTINGS] APP_NAME: {self.APP_NAME}")
         print(f"[SETTINGS] DEBUG: {self.DEBUG}")
@@ -66,6 +111,6 @@ class Settings(BaseSettings):
 
 
 # ============================================================
-# Singleton
+# 🔹 Singleton de configurações
 # ============================================================
 settings = Settings()

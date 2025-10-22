@@ -4,27 +4,21 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    // ============================================================
-    // 🔹 Desenvolvimento local
-    // ============================================================
+   
     "dev": "vite --mode devlocal",
     "dev:local": "vite --mode devlocal",
     "dev:remote": "vite --mode devremote",
 
-    // ============================================================
-    // 🔹 Build e preview
-    // ============================================================
+  
     "build": "vite build --mode production",
     "build:remote": "vite build --mode devremote",
     "build:local": "vite build --mode devlocal",
 
-    // Preview da build local (simula ambiente Render)
+   
     "preview": "vite preview --host --port 5173",
     "preview:prod": "vite preview --host --port 4173 --mode production",
 
-    // ============================================================
-    // 🔹 Utilidades
-    // ============================================================
+  
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "format": "prettier --write ."
   },
