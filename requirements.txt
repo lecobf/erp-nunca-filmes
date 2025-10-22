@@ -12,7 +12,8 @@ SQLAlchemy==2.0.36
 alembic==1.13.3
 
 # 🔹 Drivers PostgreSQL (com fallback automático)
-psycopg2-binary==2.9.9      # Fallback legado — mais estável em alguns ambientes (ex: Python 3.13)
+psycopg[binary]==3.2.3
+
 
 sqlite-utils==3.37          # Utilitário útil em dev/testes
 
