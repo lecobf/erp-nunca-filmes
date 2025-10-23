@@ -17,8 +17,8 @@ psycopg[binary]
 sqlite-utils==3.37          # Utilitário útil em dev/testes
 
 # --- Validação e configuração ---
-pydantic>=2.5.0
-pydantic-settings>=2.0.3
+pydantic>=2.9
+pydantic-settings
 python-dotenv==1.0.1
 
 # --- Segurança e CORS ---
