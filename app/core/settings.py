@@ -1,6 +1,7 @@
 import os
 from functools import lru_cache
-from pydantic import BaseSettings, Field, AnyUrl, validator
+from pydantic import Field, validator
+from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
 # ============================================================
