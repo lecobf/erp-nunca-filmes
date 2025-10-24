@@ -27,14 +27,14 @@ def dados_periodo(
 
     # Filtros de data
     if ano:
-        query_serv = query_serv.filter(func.strftime("%Y", Servico.data_contratacao) == str(ano))
-        query_pag = query_pag.filter(func.strftime("%Y", Pagamento.data_pagamento) == str(ano))
-        query_custos = query_custos.filter(func.strftime("%Y", Custo.data_custo) == str(ano))
+        query_serv = query_serv.filter(func.extract("year", Servico.data_contratacao) == ano)
+        query_pag = query_pag.filter(func.extract("year", Pagamento.data_pagamento) == ano)
+        query_custos = query_custos.filter(func.extract("year", Custo.data_custo) == ano)
 
     if mes:
-        query_serv = query_serv.filter(func.strftime("%m", Servico.data_contratacao) == f"{mes:02d}")
-        query_pag = query_pag.filter(func.strftime("%m", Pagamento.data_pagamento) == f"{mes:02d}")
-        query_custos = query_custos.filter(func.strftime("%m", Custo.data_custo) == f"{mes:02d}")
+        query_serv = query_serv.filter(func.extract("month", Servico.data_contratacao) == mes)
+        query_pag = query_pag.filter(func.extract("month", Pagamento.data_pagamento) == mes)
+        query_custos = query_custos.filter(func.extract("month", Custo.data_custo) == mes)
 
     if data_inicio and data_fim:
         try:
@@ -53,7 +53,6 @@ def dados_periodo(
 
     lucro_liquido = soma_servicos - soma_custos
 
-    # ✅ Retorno padrão FastAPI (com CORS)
     return {
         "total_servicos": total_servicos,
         "soma_servicos": soma_servicos,
@@ -78,18 +77,21 @@ def top_clientes_pagamentos(
         )
         .join(Servico, Servico.id == Pagamento.servico_id)
         .join(Cliente, Cliente.id == Servico.cliente_id)
-        .group_by(Cliente.nome)
+    )
+
+    # ✅ Filtro vem antes do agrupamento e do limit
+    if ano:
+        query = query.filter(func.extract("year", Pagamento.data_pagamento) == ano)
+
+    query = (
+        query.group_by(Cliente.nome)
         .order_by(func.sum(Pagamento.valor_pago).desc())
         .limit(10)
     )
 
-    if ano:
-        query = query.filter(func.strftime("%Y", Pagamento.data_pagamento) == str(ano))
-
     resultados = query.all()
 
-    # ✅ Retorno padrão FastAPI (com CORS)
     return [
-        {"cliente": r.cliente, "total_pago": r.total_pago or 0.0}
+        {"cliente": r.cliente, "total_pago": float(r.total_pago or 0.0)}
         for r in resultados
     ]
