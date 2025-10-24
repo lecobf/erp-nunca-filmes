@@ -7,7 +7,7 @@ from ..utils.deps import get_db
 from ..models.pagamento import Pagamento
 from ..models.servico import Servico
 from ..models.cliente import Cliente
-from ..schemas.pagamento import PagamentoBase
+from ..schemas.pagamento import PagamentoCreate
 from ..utils.filtros import aplicar_filtros_data
 
 router = APIRouter(prefix="/pagamentos", tags=["pagamentos"])
