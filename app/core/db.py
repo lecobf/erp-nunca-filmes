@@ -4,54 +4,85 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.engine import make_url
 
+# ==============================
+# 🎨 Cores ANSI para logs
+# ==============================
+class Colors:
+    RESET = "\033[0m"
+    GREEN = "\033[92m"
+    RED = "\033[91m"
+    YELLOW = "\033[93m"
+    CYAN = "\033[96m"
+    MAGENTA = "\033[95m"
+    GRAY = "\033[90m"
+    BOLD = "\033[1m"
+
+
 Base = declarative_base()
 SessionLocal = None
 engine = None
 
 
+# ==============================
+# ⚙️ Funções utilitárias
+# ==============================
+def debug_log(message: str, color=Colors.GRAY):
+    """Imprime logs coloridos apenas se DB_DEBUG=true"""
+    if os.getenv("DB_DEBUG", "false").lower() in ("1", "true", "yes"):
+        print(color + message + Colors.RESET)
+
+
 def get_database_url() -> str:
     """
-    Retorna uma URL de banco de dados válida, com fallback para SQLite.
-    Faz decodificação segura de caracteres especiais e mantém sslmode=require.
+    Retorna uma URL válida para o banco de dados.
+    Adiciona sslmode=require quando necessário.
     """
     url = os.getenv("DATABASE_URL")
 
     if not url:
-        print("[WARN] DATABASE_URL não encontrada. Usando SQLite local.")
+        print(f"{Colors.YELLOW}[WARN]{Colors.RESET} DATABASE_URL não encontrada. Usando SQLite local.")
         return "sqlite:///./app.db"
 
-    # 🔹 Corrige prefixos comuns (Render/Railway) se necessário
+    # Corrige prefixos (Render/Railway/Neon)
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+psycopg://", 1)
     elif url.startswith("postgresql://") and "+psycopg" not in url:
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
 
-    # 🔹 Força sslmode=require se ainda não presente
+    # Força sslmode=require (exceto local)
     if "sslmode=" not in url and "localhost" not in url:
         url += "?sslmode=require"
 
     return url
 
 
+# ==============================
+# 🚀 Inicialização do banco
+# ==============================
 def init_engine():
-    """
-    Inicializa o SQLAlchemy Engine e testa conexão direta via psycopg.
-    """
     global engine, SessionLocal
+
     db_url = get_database_url()
+    masked_url = db_url
 
-    print(f"[DB] URL detectada (mascarada): {db_url.replace(os.getenv('DB_PASS', ''), '***')}")
+    if "@" in db_url and ":" in db_url.split("@")[0]:
+        masked_url = db_url.split("://")[0] + "://***:***@" + db_url.split("@")[1]
 
-    # 🔹 Teste direto de conexão (igual ao main.py dummy)
+    debug_log(f"[DB-DEBUG] URL COMPLETA: {db_url}", Colors.MAGENTA)
+    print(f"{Colors.CYAN}[DB]{Colors.RESET} URL detectada (mascarada): {masked_url}")
+
+    # Teste direto com psycopg (removendo '+psycopg')
     try:
-        with psycopg.connect(db_url) as conn:
+        direct_url = db_url.replace("postgresql+psycopg://", "postgresql://", 1)
+        with psycopg.connect(direct_url) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT 1;")
-                print("[DB] Conexão direta OK ✅")
+                cur.execute("SELECT version();")
+                version = cur.fetchone()[0]
+                print(f"{Colors.GREEN}[DB]{Colors.RESET} Conexão direta OK ✅ ({version})")
     except Exception as e:
-        print(f"[DB] Falha na conexão direta ❌: {e}")
+        print(f"{Colors.RED}[DB]{Colors.RESET} Falha na conexão direta ❌: {e}")
 
-    # 🔹 Criação segura do Engine SQLAlchemy
+    # Cria o Engine SQLAlchemy
     try:
         url_obj = make_url(db_url)
         engine = create_engine(
@@ -61,11 +92,11 @@ def init_engine():
             future=True,
         )
         SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-        print("[DB] Engine SQLAlchemy inicializado com sucesso ✅")
+        print(f"{Colors.GREEN}[DB]{Colors.RESET} Engine SQLAlchemy inicializado com sucesso ✅")
     except Exception as e:
-        print(f"[DB] Erro ao criar engine SQLAlchemy ❌: {e}")
+        print(f"{Colors.RED}[DB]{Colors.RESET} Erro ao criar engine SQLAlchemy ❌: {e}")
         raise
 
 
-# 🔹 Inicialização automática ao importar
+# Inicializa automaticamente ao importar
 init_engine()
