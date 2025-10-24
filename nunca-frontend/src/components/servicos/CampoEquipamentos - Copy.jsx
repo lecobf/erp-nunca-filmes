@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ModalEquipamentos from "./ModalEquipamentos";
+// import { BoxSelect } from "lucide-react"; // ❌ não usado
+import CurrencyInput from "../CurrencyInput";
 
 /**
  * Props esperadas:
@@ -9,9 +11,11 @@ import ModalEquipamentos from "./ModalEquipamentos";
  * - equipamentosIniciais?: array de equipamentos já ligados ao serviço (edição)
  * - onPacoteChange?: (boolean) => void
  * - pacoteInicial?: boolean
+ * - showLabel?: boolean
  */
 export default function CampoEquipamentos({
   valor = 0,
+  showLabel = true,
   onValorChange,
   onSelecionar,
   equipamentosIniciais = [],
@@ -89,77 +93,93 @@ export default function CampoEquipamentos({
   }
 
   function handleValorManualMudou(novoValor) {
+    // CurrencyInput já entrega número; mas garantimos:
+    const num = Number(novoValor) || 0;
     // Só permite edição manual quando É PACOTE
     if (!isPacote) return;
-    const num = Number(novoValor) || 0;
     setValorLocal(num);
     onValorChange && onValorChange(num);
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      {/* Linha do título + checkbox */}
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Valor Diária Equipamentos</span>
+  <div className="flex flex-col gap-2">
+    {/* Título acima, sem checkbox aqui */}
+    {showLabel && (
+      <span className="block mb-1 text-sm font-medium">
+        Valor Diária Equipamentos
+      </span>
+    )}
 
-        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={isPacote}
-            onChange={(e) => handleTogglePacote(e.target.checked)}
-          />
-          É pacote
-        </label>
+   {/* Linha principal: input ocupa 100% + botão como adornment + chip 'Pacote' ao final */}
+<div className="flex items-center gap-2">
+  {/* Input com botão sobreposto */}
+  <div className="relative flex-1">
+    <CurrencyInput
+      value={Number(valorLocal) || 0}
+      onChange={(val) => handleValorManualMudou(val)}
+      readOnly={!isPacote}
+      className={`h-10 w-full pr-12 ${!isPacote ? "bg-gray-100" : ""}`} // 👈 espaço p/ o botão
+    />
+
+    {/* Botão sobre o canto direito do input */}
+    <button
+      type="button"
+      disabled={isPacote}
+      onClick={handleAbrirModal}
+      title="Selecionar equipamentos"
+      aria-label="Selecionar equipamentos"
+      className={`absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center rounded ${
+        isPacote
+          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+          : "bg-blue-600 hover:bg-blue-700 text-white"
+      }`}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <rect x="3" y="4" width="18" height="14" rx="2"></rect>
+        <path d="M7 8h10M7 12h10M7 16h6"></path>
+      </svg>
+    </button>
+  </div>
+
+  {/* Chip Pacote no final */}
+  <label
+    title="Marque para editar valor manualmente"
+    className="whitespace-nowrap flex items-center gap-2 text-xs cursor-pointer select-none px-2 h-10 rounded border"
+  >
+    <input
+      type="checkbox"
+      checked={isPacote}
+      onChange={(e) => handleTogglePacote(e.target.checked)}
+    />
+    Pacote
+  </label>
+</div>
+
+
+    {/* Resumo seleção */}
+    {!isPacote && selecionados.length > 0 && (
+      <div className="text-xs text-gray-600">
+        {selecionados.length} item(ns) selecionados — soma atual:{" "}
+        <strong>R$ {totalSelecionados.toFixed(2)}</strong>
       </div>
+    )}
 
-      {/* Campo de valor + botão da modal */}
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          className={`border rounded p-2 w-36 ${isPacote ? "" : "bg-gray-100"}`}
-          value={Number(valorLocal) || 0}
-          onChange={(e) => handleValorManualMudou(e.target.value)}
-          readOnly={!isPacote}
-          min={0}
-          step="0.01"
-        />
+    {/* Modal */}
+    {modalOpen && (
+      <ModalEquipamentos
+        isOpen={modalOpen}
+        onClose={handleCancelarModal}
+        onConfirm={handleConfirmarEquipamentos}
+        preSelecionados={selecionados}
+      />
+    )}
+  </div>
+);
 
-        <button
-          type="button"
-          disabled={isPacote}
-          onClick={handleAbrirModal}
-          className={`px-3 py-2 rounded text-white ${
-            isPacote
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700"
-          }`}
-          title={
-            isPacote
-              ? "Desmarque 'É pacote' para selecionar equipamentos"
-              : "Selecionar equipamentos"
-          }
-        >
-          Selecionar equipamentos
-        </button>
-      </div>
-
-      {/* Lista simples dos selecionados (útil para conferência) */}
-      {!isPacote && selecionados.length > 0 && (
-        <div className="text-xs text-gray-600">
-          {selecionados.length} item(ns) selecionados – soma atual:{" "}
-          <strong>R$ {totalSelecionados.toFixed(2)}</strong>
-        </div>
-      )}
-
-      {/* Modal de equipamentos */}
-      {modalOpen && (
-        <ModalEquipamentos
-          isOpen={modalOpen}
-          onClose={handleCancelarModal}
-          onConfirm={handleConfirmarEquipamentos}
-          preSelecionados={selecionados} // mantém pré-seleção e quantidade
-        />
-      )}
-    </div>
-  );
 }

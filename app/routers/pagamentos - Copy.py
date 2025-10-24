@@ -15,6 +15,7 @@ router = APIRouter(prefix="/pagamentos", tags=["pagamentos"])
 @router.get("")
 def listar_pagamentos(
     servico_id: int | None = Query(None),
+    cliente_id: int | None = Query(None),  # ✅ Novo filtro por cliente
     ano: int | None = Query(None),
     mes: int | None = Query(None),
     data_inicio: str | None = Query(None),
@@ -23,8 +24,15 @@ def listar_pagamentos(
 ):
     query = db.query(Pagamento)
 
+    # 🔸 Filtros de serviço e cliente
     if servico_id:
         query = query.filter(Pagamento.servico_id == servico_id)
+    if cliente_id:
+        # Faz o join com Servico para filtrar pelo cliente
+        query = query.join(Servico, Servico.id == Pagamento.servico_id)
+        query = query.filter(Servico.cliente_id == cliente_id)
+
+    # 🔸 Filtros de data
     if ano:
         query = query.filter(func.strftime("%Y", Pagamento.data_pagamento) == str(ano))
     if mes:
@@ -60,7 +68,7 @@ def listar_pagamentos(
             "valor_pendente": p.valor_pendente,
             "servico_descricao": servico.descricao if servico else None,
             "servico_valor_final": servico.valor_final if servico else 0,
-            "servico_valor_pendente_atual": servico.valor_pendente_atual if servico else 0,  # 🔹 novo
+            "servico_valor_pendente_atual": servico.valor_pendente_atual if servico else 0,
             "cliente_nome": cliente.nome if cliente else None,
         })
     return resposta
