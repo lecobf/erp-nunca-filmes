@@ -1,11 +1,4 @@
-// src/pages/Dashboard.jsx
-import React, { useEffect, useState } from "react";
-import {
-  Box,
-  Paper,
-  Typography,
-  CircularProgress,
-} from "@mui/material";
+import React, { useState, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -25,132 +18,196 @@ import { api } from "../api/config";
 import dayjs from "dayjs";
 
 export default function Dashboard() {
-  const [loading, setLoading] = useState(true);
-  const [dadosPeriodo, setDadosPeriodo] = useState([]);
+  const [anoSelecionado, setAnoSelecionado] = useState(dayjs().year());
+  const [dados, setDados] = useState(null);
   const [topClientes, setTopClientes] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const anoAtual = dayjs().year();
+  const cores = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#AA336A", "#999999"];
 
-  useEffect(() => {
-    carregarDadosPeriodo();
-    carregarTopClientes();
-  }, []);
-
-  const carregarDadosPeriodo = async () => {
+  // 🔹 Carrega os dados do dashboard (receita prevista/recebida)
+  const carregarDashboard = async () => {
     try {
-      const response = await api.get(`/dashboard/periodo?ano=${anoAtual}`);
-      const data = response?.data;
-      // Usa os dados mensais de "geral"
-      const mensal = data?.geral?.mensal || [];
-      setDadosPeriodo(Array.isArray(mensal) ? mensal : []);
+      const response = await api.get(`/dashboard/periodo?ano=${anoSelecionado}`);
+      setDados(response.data);
     } catch (error) {
-      console.error("Erro ao carregar dados do período:", error);
-      setDadosPeriodo([]);
-    } finally {
-      setLoading(false);
+      console.error("Erro ao carregar dados do dashboard:", error);
     }
   };
 
+  // 🔹 Carrega os dados dos top 5 clientes
   const carregarTopClientes = async () => {
     try {
-      const response = await api.get(`/dashboard/top-clientes-pagamentos?ano=${anoAtual}`);
-      const data = response?.data;
-      setTopClientes(Array.isArray(data) ? data : []);
+      const response = await api.get(`/dashboard/top-clientes-pagamentos?ano=${anoSelecionado}`);
+      setTopClientes(response.data);
     } catch (error) {
       console.error("Erro ao carregar top clientes:", error);
-      setTopClientes([]);
     }
   };
 
-  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#FF6666"];
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([carregarDashboard(), carregarTopClientes()]).then(() => setLoading(false));
+  }, [anoSelecionado]);
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
-        <CircularProgress />
-      </Box>
-    );
+  if (loading || !dados) {
+    return <p style={{ textAlign: "center", marginTop: "50px" }}>Carregando dados...</p>;
   }
 
+  // 🔹 Dados para os gráficos mensais
+  const dadosMensais = dados?.geral?.mensal || [];
+  const dataGrafico = dadosMensais.map((item) => ({
+    mes: item.mes,
+    receita_prevista: item.valor, // total de serviços criados
+    receita_recebida: item.receita_recebida || 0,
+  }));
+
+  // 🔹 Dados para o gráfico de pizza
+  const dataPie = topClientes.map((item, index) => ({
+    name: item.cliente_nome,
+    value: item.total_pago,
+    color: cores[index % cores.length],
+  }));
+
+  const totalPrevista = dados?.geral?.receita_prevista_periodo?.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+  const totalRecebida = dados?.geral?.receita_recebida_periodo?.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+  const totalLucro = dados?.geral?.lucro_liquido?.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+  const totalAReceber = dados?.geral?.a_receber_periodo?.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+
   return (
-    <Box p={3} width="100%" sx={{ backgroundColor: "#f9f9f9", minHeight: "100vh" }}>
-      <Typography variant="h4" gutterBottom fontWeight="bold" textAlign="center">
-        Dashboard Financeiro {anoAtual}
-      </Typography>
+    <div style={{ padding: "30px", width: "100%", height: "100%", background: "#f7f9fc" }}>
+      <h1 style={{ textAlign: "center", marginBottom: "20px" }}>Dashboard Financeiro</h1>
 
-      {/* === Gráfico 1: Receita Prevista === */}
-      <Paper sx={{ p: 3, mb: 4, width: "100%" }} elevation={3}>
-        <Typography variant="h6" gutterBottom>
-          Receita Prevista (Valor Final dos Serviços)
-        </Typography>
-        <Box sx={{ width: "100%", height: 400 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dadosPeriodo}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="mes" />
-              <YAxis />
-              <Tooltip formatter={(v) => `R$ ${v?.toLocaleString()}`} />
-              <Legend />
-              <Bar dataKey="valor" fill="#1976d2" name="Receita Prevista" />
-            </BarChart>
-          </ResponsiveContainer>
-        </Box>
-      </Paper>
+      {/* 🔹 Filtro de ano */}
+      <div style={{ textAlign: "center", marginBottom: "20px" }}>
+        <label>
+          <strong>Selecione o ano:</strong>{" "}
+          <select
+            value={anoSelecionado}
+            onChange={(e) => setAnoSelecionado(e.target.value)}
+            style={{ padding: "5px 10px", fontSize: "16px" }}
+          >
+            {[2023, 2024, 2025, 2026].map((ano) => (
+              <option key={ano} value={ano}>
+                {ano}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
-      {/* === Gráfico 2: Receita Recebida === */}
-      <Paper sx={{ p: 3, mb: 4, width: "100%" }} elevation={3}>
-        <Typography variant="h6" gutterBottom>
-          Receita Recebida (Pagamentos por Mês)
-        </Typography>
-        <Box sx={{ width: "100%", height: 400 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={dadosPeriodo}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="mes" />
-              <YAxis />
-              <Tooltip formatter={(v) => `R$ ${v?.toLocaleString()}`} />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey="valor"
-                stroke="#ff7300"
-                name="Receita Recebida"
-                strokeWidth={3}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </Box>
-      </Paper>
+      {/* 🔹 Cards de resumo */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: "20px",
+          marginBottom: "40px",
+        }}
+      >
+        <Card titulo="Receita Prevista" valor={totalPrevista} cor="#007bff" />
+        <Card titulo="Receita Recebida" valor={totalRecebida} cor="#28a745" />
+        <Card titulo="Lucro Líquido" valor={totalLucro} cor="#17a2b8" />
+        <Card titulo="A Receber" valor={totalAReceber} cor="#ffc107" />
+      </div>
 
-      {/* === Gráfico 3: Top 5 Clientes === */}
-      <Paper sx={{ p: 3, width: "100%", mb: 6 }} elevation={3}>
-        <Typography variant="h6" gutterBottom>
-          Top 5 Clientes com Maior Volume de Pagamentos ({anoAtual})
-        </Typography>
-        <Box sx={{ width: "100%", height: 450 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={topClientes}
-                dataKey="total_pago"
-                nameKey="cliente_nome"
-                cx="50%"
-                cy="50%"
-                outerRadius={150}
-                label={({ cliente_nome, total_pago }) =>
-                  `${cliente_nome}: R$${total_pago?.toLocaleString() ?? 0}`
-                }
-              >
-                {topClientes.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => `R$${value?.toLocaleString() ?? 0}`} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </Box>
-      </Paper>
-    </Box>
+      {/* 🔹 Gráfico 1 - Barras */}
+      <div style={{ width: "100%", height: "400px", marginBottom: "50px" }}>
+        <h3 style={{ textAlign: "center", marginBottom: "10px" }}>
+          Receita Prevista × Receita Recebida (Barras)
+        </h3>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={dataGrafico}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="mes" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="receita_prevista" fill="#007bff" name="Prevista" />
+            <Bar dataKey="receita_recebida" fill="#ff7300" name="Recebida" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* 🔹 Gráfico 2 - Linhas */}
+      <div style={{ width: "100%", height: "400px", marginBottom: "50px" }}>
+        <h3 style={{ textAlign: "center", marginBottom: "10px" }}>
+          Receita Prevista × Receita Recebida (Linhas)
+        </h3>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={dataGrafico}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="mes" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Line type="monotone" dataKey="receita_prevista" stroke="#007bff" name="Prevista" />
+            <Line type="monotone" dataKey="receita_recebida" stroke="#ff7300" name="Recebida" />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* 🔹 Gráfico 3 - Pizza */}
+      <div style={{ width: "100%", height: "400px", marginBottom: "50px" }}>
+        <h3 style={{ textAlign: "center", marginBottom: "10px" }}>
+          Top 5 Clientes por Pagamentos
+        </h3>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={dataPie}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={({ name, value }) => `${name}: ${value.toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}`}
+              outerRadius={150}
+              fill="#8884d8"
+              dataKey="value"
+            >
+              {dataPie.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// 🔹 Componente de Card
+function Card({ titulo, valor, cor }) {
+  return (
+    <div
+      style={{
+        backgroundColor: cor,
+        color: "white",
+        borderRadius: "10px",
+        padding: "20px",
+        textAlign: "center",
+        fontWeight: "bold",
+        boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
+      }}
+    >
+      <h4 style={{ marginBottom: "10px" }}>{titulo}</h4>
+      <h2>{valor}</h2>
+    </div>
   );
 }
