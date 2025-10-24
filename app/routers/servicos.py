@@ -4,7 +4,7 @@ from typing import Optional
 from ..utils.deps import get_db
 from ..models.servico import Servico
 from ..models.cliente import Cliente
-from ..schemas.servico import ServicoBase
+from ..schemas.servico import ServicoCreate
 from ..utils.filtros import aplicar_filtros_data
 
 router = APIRouter(prefix="/servicos", tags=["servicos"])
