@@ -57,6 +57,19 @@ def get_database_url() -> str:
 
 
 # ==============================
+# 🔁 Dependência FastAPI
+# ==============================
+def get_db():
+    """
+    Cria e gerencia uma sessão de banco de dados para injeção de dependência.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# ==============================
 # 🚀 Inicialização do banco
 # ==============================
 def init_engine():
