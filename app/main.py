@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import re
+from sqlalchemy.engine import make_url
 
 # ============================================================
 # 🔹 Proteção para ambientes com multiprocessing (Windows)
@@ -21,10 +23,9 @@ else:
     load_dotenv(dotenv_path=env_path)
     print(f"[ENV] Variáveis carregadas de: {env_path}")
 
-# debug_db_url.py  (peça: cole este bloco em main.py ou settings.py logo após carregar envs)
-import os
-from sqlalchemy.engine import make_url
-
+# ============================================================
+# 🔹 Debug da conexão com o banco
+# ============================================================
 def mask_password(pw: str) -> str:
     if not pw:
         return ""
@@ -47,33 +48,21 @@ def get_db_url_info(raw_url: str):
         "query": dict(url.query) if url.query else {}
     }
 
-# --- start debug block ---
 raw_db = os.getenv("DATABASE_URL", "")
 info = get_db_url_info(raw_db)
 
 if info is None:
     print("[DB-DEBUG] DATABASE_URL is missing or could not be parsed.")
 else:
-    masked_pw = info["password"]
-    # Rebuild a masked URL for safe logging
+    masked_pw = mask_password(info["password"])
     host_part = info["host"] or ""
     port_part = f":{info['port']}" if info.get("port") else ""
     masked_url = f"{info['drivername']}://{info['username']}:{masked_pw}@{host_part}{port_part}/{info['database']}"
-
     print(f"[DB-DEBUG] DB driver: {info['drivername']}")
     print(f"[DB-DEBUG] DB user: {info['username']}")
     print(f"[DB-DEBUG] DB host: {host_part}{port_part}")
     print(f"[DB-DEBUG] DB name: {info['database']}")
     print(f"[DB-DEBUG] DB url (masked): {masked_url}")
-
-    # Optional: print full URL only if explicitly allowed via env var
-    if os.getenv("LOG_FULL_DB_URL", "false").lower() in ("1", "true", "yes"):
-        # WARNING: this will show the password in plaintext in logs
-        print(f"[DB-DEBUG] DB url (FULL, DANGER): {raw_db}")
-    else:
-        print("[DB-DEBUG] Full DB URL logging is disabled. Set LOG_FULL_DB_URL=true (temporary) to enable.")
-# --- end debug block ---
-
 
 # ============================================================
 # 🔹 Importações internas
@@ -95,28 +84,24 @@ from app.routers.dashboard import router as dashboard_router
 app = FastAPI(title="ERP Backend", version="1.0")
 
 # ============================================================
-# 🔹 Configuração de CORS (dinâmica via .env)
+# 🔹 Configuração de CORS
 # ============================================================
-# ============================================================
-# 🔹 Configuração de CORS (dinâmica via .env com suporte a wildcard)
-# ============================================================
-import re
+# Inclui o domínio do frontend hospedado no Render
+default_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://erp-nunca-filmes-1.onrender.com",  # ✅ domínio do frontend
+]
 
 cors_origins_env = os.getenv("CORS_ORIGINS", "")
 if cors_origins_env.strip():
-    raw_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+    raw_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 else:
-    raw_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    raw_origins = default_origins
 
-# Divide entre origens exatas e padrões wildcard
 allowed_exact = [o for o in raw_origins if "*" not in o]
 allowed_regex = [o for o in raw_origins if "*" in o]
-
-# Converte wildcards em expressões regulares (para CORSMiddleware)
-regex_patterns = []
-for pattern in allowed_regex:
-    regex = re.escape(pattern).replace("\\*", ".*")
-    regex_patterns.append(f"^{regex}$")
+regex_patterns = [f"^{re.escape(o).replace('\\*', '.*')}$" for o in allowed_regex]
 
 print("[CORS] Origens exatas permitidas:", allowed_exact)
 if regex_patterns:
@@ -130,7 +115,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # ============================================================
 # 🔹 Inicialização do banco de dados
@@ -153,17 +137,14 @@ app.include_router(dashboard_router)
 # ============================================================
 @app.get("/health")
 def health():
-    """Rota de status para monitoramento (usada pelo Render)."""
     return {
         "status": "ok",
         "env": settings.ENV,
         "database_url": settings.DATABASE_URL,
     }
 
-
 @app.get("/debug-env")
 def debug_env():
-    """Mostra informações úteis de ambiente (somente para debug)."""
     return {
         "cwd": os.getcwd(),
         "ENV": settings.ENV,
@@ -179,5 +160,5 @@ if __name__ == "__main__":
     print(f"[START] Iniciando servidor em 0.0.0.0:{port}")
     print(f"[INFO] Ambiente: {settings.ENV}")
     print(f"[INFO] Banco de dados: {settings.DATABASE_URL}")
-    print(f"[INFO] CORS permitido para: {allowed_origins}")
+    print(f"[INFO] CORS permitido para: {allowed_exact}")
     uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
