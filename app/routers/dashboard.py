@@ -1,8 +1,7 @@
-# app/routers/dashboard.py
 from datetime import datetime, date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import func
 
 from app.core.db import get_db
 from app.models.servico import Servico
@@ -13,19 +12,21 @@ from app.models.cliente import Cliente
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 
-# ============================================================
-# 🔹 Função auxiliar para converter datas
-# ============================================================
-def parse_date(data_str: str, default: date) -> date:
+# -----------------------------
+# Função auxiliar para parsear datas
+# -----------------------------
+def parse_date(data_str: str | None, default: date) -> date:
+    if not data_str:
+        return default
     try:
         return datetime.strptime(data_str, "%Y-%m-%d").date()
     except Exception:
         return default
 
 
-# ============================================================
-# 🔹 Rota principal: /dashboard/periodo
-# ============================================================
+# -----------------------------
+# Endpoint: /dashboard/periodo
+# -----------------------------
 @router.get("/periodo")
 def dashboard_periodo(
     ano: int = Query(None, description="Ano de referência (ex: 2025)"),
@@ -38,83 +39,117 @@ def dashboard_periodo(
     inicio = parse_date(data_inicio, date(ano, 1, 1))
     fim = parse_date(data_fim, date(ano, 12, 31))
 
-    # ----------------------------------------
-    # 🔸 Função de cálculo consolidado
-    # ----------------------------------------
     def calc(tipo: str | None = None):
-        filtro_tipo = []
+        filtros_servico = [Servico.data_contratacao.between(inicio, fim)]
         if tipo:
-            filtro_tipo.append(Servico.tipo == tipo)
+            filtros_servico.append(Servico.tipo_servico == tipo)
 
-        # 🔸 Receita prevista (serviços criados no período)
+        # Receita prevista (serviços criados no período)
         receita_prevista = (
-            db.query(func.sum(Servico.valor_final))
-            .filter(Servico.data_criacao.between(inicio, fim), *filtro_tipo)
+            db.query(func.coalesce(func.sum(Servico.valor_final), 0.0))
+            .filter(*filtros_servico)
             .scalar()
-            or 0
         )
 
-        # 🔸 Receita recebida (pagamentos realizados no período)
+        # Receita recebida (pagamentos efetivados no período)
         receita_recebida = (
-            db.query(func.sum(Pagamento.valor_pago))
+            db.query(func.coalesce(func.sum(Pagamento.valor_pago), 0.0))
             .filter(Pagamento.data_pagamento.between(inicio, fim))
             .scalar()
-            or 0
         )
 
-        # 🔸 Receita retroativa
+        # Receita retroativa (pagamentos de serviços criados antes do período)
         receita_retroativa = (
-            db.query(func.sum(Pagamento.valor_pago))
+            db.query(func.coalesce(func.sum(Pagamento.valor_pago), 0.0))
             .join(Servico, Pagamento.servico_id == Servico.id)
             .filter(
-                Servico.data_criacao < inicio,
+                Servico.data_contratacao < inicio,
                 Pagamento.data_pagamento.between(inicio, fim),
-                *filtro_tipo,
+                *( [Servico.tipo_servico == tipo] if tipo else [] ),
             )
             .scalar()
-            or 0
         )
 
-        # 🔸 A receber (serviços no período com saldo)
+        # A receber no período
         a_receber_periodo = (
-            db.query(func.sum(Servico.valor_final - Servico.valor_pago_total))
-            .filter(Servico.data_criacao.between(inicio, fim), *filtro_tipo)
+            db.query(func.coalesce(func.sum(Servico.valor_pendente_atual), 0.0))
+            .filter(*filtros_servico)
             .scalar()
-            or 0
         )
 
-        # 🔸 A receber retroativo (serviços anteriores ainda com saldo)
+        # A receber retroativo
+        filtros_retro = []
+        if tipo:
+            filtros_retro.append(Servico.tipo_servico == tipo)
+
         a_receber_retroativo = (
-            db.query(func.sum(Servico.valor_final - Servico.valor_pago_total))
-            .filter(Servico.data_criacao < inicio, *filtro_tipo)
+            db.query(func.coalesce(func.sum(Servico.valor_pendente_atual), 0.0))
+            .filter(Servico.data_contratacao < inicio, *filtros_retro)
             .scalar()
-            or 0
         )
 
-        # 🔸 Custos no período
+        # Custos do período
         custos = (
-            db.query(func.sum(Custo.valor))
-            .filter(Custo.data_custo.between(inicio, fim))
+            db.query(func.coalesce(func.sum(Custo.valor), 0.0))
+            .filter(Custo.data.between(inicio, fim))
             .scalar()
-            or 0
         )
 
         lucro_liquido = receita_recebida - custos
 
-        # 🔸 Receita mensal (PostgreSQL usa to_char)
-        mensal = (
+        # Agregação mensal (prevista)
+        mes_trunc = func.date_trunc("month", Servico.data_contratacao).label("mes_ref")
+        mensal_prevista = (
             db.query(
-                func.to_char(Servico.data_criacao, "Mon/YYYY").label("mes"),
-                func.sum(Servico.valor_final).label("valor"),
+                mes_trunc,
+                func.coalesce(func.sum(Servico.valor_final), 0.0).label("valor_previsto"),
             )
-            .filter(Servico.data_criacao.between(inicio, fim), *filtro_tipo)
-            .group_by(text("mes"))
-            .order_by(text("min(Servico.data_criacao)"))
+            .filter(*filtros_servico)
+            .group_by(mes_trunc)
+            .order_by(mes_trunc.asc())
             .all()
         )
 
+        # Agregação mensal (recebida)
+        mes_pag = func.date_trunc("month", Pagamento.data_pagamento).label("mes_ref")
+        if tipo:
+            mensal_recebida = (
+                db.query(
+                    mes_pag,
+                    func.coalesce(func.sum(Pagamento.valor_pago), 0.0).label("valor_recebido"),
+                )
+                .join(Servico, Pagamento.servico_id == Servico.id)
+                .filter(
+                    Pagamento.data_pagamento.between(inicio, fim),
+                    Servico.tipo_servico == tipo,
+                )
+                .group_by(mes_pag)
+                .order_by(mes_pag.asc())
+                .all()
+            )
+        else:
+            mensal_recebida = (
+                db.query(
+                    mes_pag,
+                    func.coalesce(func.sum(Pagamento.valor_pago), 0.0).label("valor_recebido"),
+                )
+                .filter(Pagamento.data_pagamento.between(inicio, fim))
+                .group_by(mes_pag)
+                .order_by(mes_pag.asc())
+                .all()
+            )
+
+        # Junta prevista e recebida
+        mapa_prev = {row.mes_ref: float(row.valor_previsto) for row in mensal_prevista}
+        mapa_rec = {row.mes_ref: float(row.valor_recebido) for row in mensal_recebida}
+        chaves = sorted(set(mapa_prev) | set(mapa_rec))
         mensal_formatado = [
-            {"mes": m.mes, "valor": float(m.valor or 0)} for m in mensal
+            {
+                "mes": dt.strftime("%Y-%m"),
+                "valor": mapa_prev.get(dt, 0.0),
+                "receita_recebida": mapa_rec.get(dt, 0.0),
+            }
+            for dt in chaves
         ]
 
         return {
@@ -127,9 +162,6 @@ def dashboard_periodo(
             "mensal": mensal_formatado,
         }
 
-    # ----------------------------------------
-    # 🔸 Retorno consolidado
-    # ----------------------------------------
     return {
         "periodo": {"inicio": inicio, "fim": fim},
         "geral": calc(),
@@ -138,9 +170,9 @@ def dashboard_periodo(
     }
 
 
-# ============================================================
-# 🔹 Rota: /dashboard/top-clientes-pagamentos
-# ============================================================
+# -----------------------------
+# Endpoint: /dashboard/top-clientes-pagamentos
+# -----------------------------
 @router.get("/top-clientes-pagamentos")
 def top_clientes_pagamentos(
     ano: int = Query(None, description="Ano de referência"),
@@ -158,7 +190,8 @@ def top_clientes_pagamentos(
             Cliente.nome.label("cliente_nome"),
             total_label,
         )
-        .join(Pagamento, Pagamento.cliente_id == Cliente.id)
+        .join(Servico, Servico.cliente_id == Cliente.id)
+        .join(Pagamento, Pagamento.servico_id == Servico.id)
         .filter(Pagamento.data_pagamento.between(inicio, fim))
         .group_by(Cliente.id, Cliente.nome)
         .order_by(total_label.desc())
@@ -175,7 +208,7 @@ def top_clientes_pagamentos(
     ]
 
     top5 = resultados[:5]
-    outros_total = sum([r["total_pago"] for r in resultados[5:]])
+    outros_total = sum(r["total_pago"] for r in resultados[5:])
     if outros_total > 0:
         top5.append(
             {"cliente_id": None, "cliente_nome": "Outros", "total_pago": float(outros_total)}
