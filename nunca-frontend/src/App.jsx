@@ -12,6 +12,7 @@ export default function App() {
           <Item to="/custos">Custos</Item>
 		  <Item to="/pagamentos">Pagamentos</Item>
 		  <Item to="/equipamentos">Equipamentos</Item>
+		  <Item to="/calendario">Calendario</Item>
         </nav>
       </aside>
       <main className="flex-1">

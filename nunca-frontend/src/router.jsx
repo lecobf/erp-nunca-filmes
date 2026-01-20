@@ -6,6 +6,7 @@ import Clientes from "./pages/Clientes";
 import Custos from "./pages/Custos";
 import Pagamentos from "./pages/Pagamentos";
 import Equipamentos from "./pages/Equipamentos";
+import Calendario from "./pages/Calendario";
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
       { path: "custos", element: <Custos /> },
       { path: "pagamentos", element: <Pagamentos /> },
       { path: "equipamentos", element: <Equipamentos /> },
+	  { path: "calendario", element: <Calendario /> }, 
     ],
   },
 ]);

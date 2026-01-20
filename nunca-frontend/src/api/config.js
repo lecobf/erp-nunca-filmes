@@ -11,9 +11,6 @@ import axios from "axios";
 // ============================================================
 // 🔧 Base URL vinda do .env (configurado no vite.config.js)
 // ============================================================
-// O Vite injeta variáveis prefixadas com "VITE_"
-// Exemplo: VITE_API_URL=http://localhost:8000
-// ============================================================
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 console.log(`🌍 API_BASE_URL carregada: ${API_BASE_URL}`);
@@ -23,7 +20,7 @@ console.log(`🌍 API_BASE_URL carregada: ${API_BASE_URL}`);
 // ============================================================
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000, // 10 segundos
+  timeout: 30000, // 🆕 Aumentado de 10s → 30s
   headers: {
     "Content-Type": "application/json",
   },
@@ -35,10 +32,13 @@ export const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     console.log(`➡️  [${config.method?.toUpperCase()}] ${config.url}`);
+    // 🆕 Exibe loading opcional global
+    document.body.style.cursor = "wait";
     return config;
   },
   (error) => {
     console.error("❌ Erro ao preparar requisição:", error);
+    document.body.style.cursor = "default";
     return Promise.reject(error);
   }
 );
@@ -49,20 +49,26 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     // sucesso → retorna normalmente
+    document.body.style.cursor = "default"; // 🆕 reseta cursor
     return response;
   },
   (error) => {
+    document.body.style.cursor = "default"; // 🆕 sempre reseta o cursor
+
     if (error.code === "ECONNABORTED") {
       console.error("⏱️ Tempo limite atingido ao tentar se conectar ao servidor.");
+      alert("O servidor demorou demais para responder. Tente novamente.");
     } else if (error.message.includes("Network Error")) {
       console.error("🌐 Erro de rede: não foi possível conectar ao backend.");
-      console.error(`Verifique se o backend FastAPI está rodando em ${API_BASE_URL}`);
+      alert(`Não foi possível conectar ao servidor em ${API_BASE_URL}`);
     } else if (error.response) {
       console.error(
         `⚠️ Erro ${error.response.status}: ${error.response.data?.detail || "Falha na requisição."}`
       );
+      alert(`Erro ${error.response.status}: ${error.response.data?.detail || "Falha na requisição."}`);
     } else {
       console.error("❌ Erro desconhecido:", error.message);
+      alert("Erro inesperado. Verifique o console para mais detalhes.");
     }
     return Promise.reject(error);
   }
@@ -71,8 +77,6 @@ api.interceptors.response.use(
 // ============================================================
 // 📦 Função auxiliar para requisições genéricas (opcional)
 // ============================================================
-// Uso: await apiRequest("clientes", "get")
-//      await apiRequest("servicos", "post", { nome: "Novo" })
 export async function apiRequest(endpoint, method = "get", data = null, params = null) {
   try {
     const response = await api.request({ url: `/${endpoint}`, method, data, params });

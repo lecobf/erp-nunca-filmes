@@ -1,3 +1,4 @@
+from datetime import date
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
@@ -295,6 +296,20 @@ def listar_itens_servico(servico_id: int, db: Session = Depends(get_db)):
         })
     return out
 
+# ---------- CAlendario ----------
+@router.get("/calendario")
+def listar_servicos_calendario(
+    inicio: date = Query(...),
+    fim: date = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Retorna serviços dentro do intervalo informado (para exibir no calendário)"""
+    return (
+        db.query(Servico)
+        .filter(Servico.data_inicio >= inicio, Servico.data_fim <= fim)
+        .all()
+    )
+    
 # ---------- DETALHE ----------
 @router.get("/{servico_id}", response_model=dict)
 def obter_servico(servico_id: int, db: Session = Depends(get_db)):

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
+import os
 
 # Importa os routers
 from app.routers.clientes import router as clientes_router
@@ -32,7 +33,7 @@ app.add_middleware(
 )
 
 # ============================================================
-# 🔹 Inclui routers (ordem importa: CORS vem antes!)
+# 🔹 Inclui routers
 # ============================================================
 app.include_router(clientes_router)
 app.include_router(servicos_router)
@@ -41,34 +42,38 @@ app.include_router(custos_router)
 app.include_router(equipamentos_router)
 app.include_router(dashboard_router)
 
-
 # ============================================================
-# 🔹 Healthcheck simples (opcional, útil para o Render)
+# 🔹 Healthcheck simples
 # ============================================================
 @app.get("/")
 async def root():
     return {"status": "ok", "message": "ERP backend ativo e rodando com sucesso!"}
 
-
 # ============================================================
-# 🔹 Middleware global de CORS (garantia absoluta)
+# 🔹 Middleware global de CORS (versão dinâmica)
 # ============================================================
 @app.middleware("http")
 async def ensure_cors(request, call_next):
     """
-    Este middleware garante que TODAS as respostas (inclusive erros e JSONResponse)
-    tenham cabeçalhos CORS válidos, independentemente do middleware padrão.
+    Garante CORS válido para qualquer ambiente:
+    - Local (http://localhost:5173)
+    - Produção (https://erp-nunca-filmes-1.onrender.com)
     """
     response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "https://erp-nunca-filmes-1.onrender.com"
+
+    # Detecta ambiente de execução
+    allowed_origin = "https://erp-nunca-filmes-1.onrender.com"
+    if "localhost" in request.headers.get("origin", "") or "127.0.0.1" in request.headers.get("origin", ""):
+        allowed_origin = request.headers.get("origin", allowed_origin)
+
+    response.headers["Access-Control-Allow-Origin"] = allowed_origin
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
     return response
 
-
 # ============================================================
-# 🔹 Ponto de entrada (usado localmente, Render ignora isso)
+# 🔹 Ponto de entrada local
 # ============================================================
 if __name__ == "__main__":
     import uvicorn
