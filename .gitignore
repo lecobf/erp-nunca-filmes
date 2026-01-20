@@ -131,3 +131,11 @@ app/routers/dashboard - Copy (2).py
 /app/core/__pycache__
 /app/models/__pycache__
 nunca-frontend/src/api/config - Copy.js
+app/core/__pycache__/config.cpython-312.pyc
+app/core/__pycache__/db.cpython-312.pyc
+app/models/__pycache__/__init__.cpython-312.pyc
+app/routers/__pycache__/custos.cpython-312.pyc
+app/routers/__pycache__/dashboard.cpython-312.pyc
+app/routers/__pycache__/pagamentos.cpython-312.pyc
+app/routers/__pycache__/servicos.cpython-312.pyc
+app/__pycache__/main.cpython-312.pyc
