@@ -122,3 +122,12 @@ ehthumbs.db
 Desktop.ini
 .DS_Store
 Icon?
+/app/models/__pycache__
+/app/core/__pycache__
+app/core/db - Copy (2).py
+app/main - Copy (2).py
+/app/routers/__pycache__
+app/routers/dashboard - Copy (2).py
+/app/core/__pycache__
+/app/models/__pycache__
+nunca-frontend/src/api/config - Copy.js
