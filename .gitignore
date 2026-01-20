@@ -139,3 +139,4 @@ app/routers/__pycache__/dashboard.cpython-312.pyc
 app/routers/__pycache__/pagamentos.cpython-312.pyc
 app/routers/__pycache__/servicos.cpython-312.pyc
 app/__pycache__/main.cpython-312.pyc
+*.pyc
