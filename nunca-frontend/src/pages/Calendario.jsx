@@ -166,7 +166,7 @@ export default function Calendario() {
         const end = addDays(start, spanDays - 1);
 
         const tituloBase = `${s.cliente_nome || "Cliente"} - ${s.descricao || ""}`.trim();
-        const titulo = tituloBase.length > 45 ? `${tituloBase.slice(0, 45)}...` : tituloBase;
+        const titulo = tituloBase.length > 55 ? `${tituloBase.slice(0, 55)}...` : tituloBase;
 
         return {
           id: s.id,
@@ -246,11 +246,14 @@ export default function Calendario() {
   const hoje = new Date();
   const baseMes = new Date(ano, mes - 1, 1);
 
-  // Estética / dimensões das barras
-  const HEADER_H = 24; // altura do “topo” do dia
-  const BAR_H = 18;
-  const BAR_GAP = 4;
-  const WEEK_PADDING_BOTTOM = 8;
+  // ✅ AJUSTES VISUAIS
+  const HEADER_H = 32;
+  const BAR_H = 22;
+  const BAR_GAP = 6;
+  const WEEK_PADDING_BOTTOM = 14;
+
+  // ✅ altura mínima por semana (estilo Google Calendar)
+  const WEEK_MIN_HEIGHT = 150;
 
   return (
     <div className="p-4">
@@ -310,7 +313,7 @@ export default function Calendario() {
       {/* Cabeçalho dias da semana */}
       <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-t overflow-hidden">
         {WEEKDAYS.map((d) => (
-          <div key={d} className="bg-gray-50 p-2 text-xs font-semibold text-gray-700">
+          <div key={d} className="bg-gray-50 p-3 text-xs font-semibold text-gray-700">
             {d}
           </div>
         ))}
@@ -321,11 +324,12 @@ export default function Calendario() {
         {weeks.map((weekDays, wIdx) => {
           const { lanes } = buildWeekLayout(weekDays);
 
-          // Altura da linha da semana: cabeçalho + barras
-          const weekHeight =
+          const computedHeight =
             HEADER_H +
             (lanes.length ? lanes.length * BAR_H + Math.max(0, lanes.length - 1) * BAR_GAP : 0) +
             WEEK_PADDING_BOTTOM;
+
+          const weekHeight = Math.max(computedHeight, WEEK_MIN_HEIGHT);
 
           return (
             <div
@@ -342,14 +346,14 @@ export default function Calendario() {
                   return (
                     <div
                       key={idx}
-                      className={`bg-white p-2 cursor-pointer hover:bg-gray-50 select-none ${isCurrentMonth ? "" : "opacity-60"}`}
+                      className={`bg-white p-3 cursor-pointer hover:bg-gray-50 select-none ${isCurrentMonth ? "" : "opacity-60"}`}
                       style={{ height: weekHeight }}
                       onClick={() => onClickDia(d)}
                       title={`Criar serviço em ${toISODate(d)}`}
                     >
                       <div className="flex items-center justify-between" style={{ height: HEADER_H }}>
                         <div
-                          className={`text-xs font-semibold ${isToday ? "text-blue-700" : "text-gray-700"}`}
+                          className={`text-sm font-semibold ${isToday ? "text-blue-700" : "text-gray-700"}`}
                         >
                           {d.getDate()}
                         </div>
@@ -368,28 +372,24 @@ export default function Calendario() {
               <div className="absolute left-0 right-0 top-0 bottom-0 pointer-events-none">
                 {lanes.map((lane, laneIdx) => {
                   return lane.map((seg) => {
-                    const colStart = seg.startIdx + 1; // grid columns are 1..7
                     const colSpan = seg.endIdx - seg.startIdx + 1;
 
-                    const top =
-                      HEADER_H +
-                      laneIdx * (BAR_H + BAR_GAP);
+                    const top = HEADER_H + laneIdx * (BAR_H + BAR_GAP);
 
-                    // Cor fixa estilo “tag vermelha” (como referência GC). Pode trocar depois.
                     const bgClass = "bg-red-500";
                     const textClass = "text-white";
 
                     return (
                       <div
-                        key={`${seg.ev.id}-${colStart}-${colSpan}-${laneIdx}`}
+                        key={`${seg.ev.id}-${seg.startIdx}-${colSpan}-${laneIdx}`}
                         className="absolute pointer-events-auto"
                         style={{
                           top,
                           height: BAR_H,
                           left: `${(seg.startIdx * 100) / 7}%`,
                           width: `${(colSpan * 100) / 7}%`,
-                          paddingLeft: 4,
-                          paddingRight: 4,
+                          paddingLeft: 6,
+                          paddingRight: 6,
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -398,7 +398,7 @@ export default function Calendario() {
                         title={seg.ev.titulo}
                       >
                         <div className={`${bgClass} ${textClass} rounded-sm h-full flex items-center overflow-hidden`}>
-                          <div className="text-[11px] font-semibold truncate">
+                          <div className="text-[12px] font-semibold truncate">
                             {seg.isStartHere ? seg.ev.titulo : ""}
                           </div>
                         </div>
