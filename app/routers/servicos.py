@@ -304,12 +304,27 @@ def listar_servicos_calendario(
     db: Session = Depends(get_db)
 ):
     """Retorna serviços dentro do intervalo informado (para exibir no calendário)"""
-    return (
+    servicos = (
         db.query(Servico)
-        .filter(Servico.data_inicio >= inicio, Servico.data_fim <= fim)
+        .filter(Servico.data_contratacao >= inicio, Servico.data_contratacao <= fim)
+        .order_by(Servico.data_contratacao.asc())
         .all()
     )
-    
+
+    resultado = []
+    for s in servicos:
+        cliente = db.query(Cliente).filter(Cliente.id == s.cliente_id).first()
+        resultado.append({
+            "id": s.id,
+            "data_contratacao": s.data_contratacao,
+            "tipo_servico": s.tipo_servico,
+            "descricao": s.descricao,
+            "numero_diarias": s.numero_diarias,
+            "cliente_id": s.cliente_id,
+            "cliente_nome": cliente.nome if cliente else None,
+        })
+    return resultado
+
 # ---------- DETALHE ----------
 @router.get("/{servico_id}", response_model=dict)
 def obter_servico(servico_id: int, db: Session = Depends(get_db)):

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { api } from "../api/config"; // ✅ substitui axios direto
 import Modal from "../components/Modal";
 import CurrencyInput from "../components/CurrencyInput";
@@ -8,10 +8,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import IconButton from "../components/IconButton";
 // import Pagination from "../components/Pagination"; // ❌ não usamos mais
 import CampoEquipamentos from "../components/servicos/CampoEquipamentos";
-
-
-
-
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 export default function Servicos() {
   const [servicos, setServicos] = useState([]);
@@ -55,10 +52,54 @@ export default function Servicos() {
   const [servicoEditando, setServicoEditando] = useState(null);
   const [equipKey, setEquipKey] = useState(0); // força limpar CampoEquipamentos no pós-criação
 
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // ----- controle “voltar para calendário” -----
+  const veioDoCalendario = searchParams.get("from") === "calendario";
+  const calendarioAno = searchParams.get("ano");
+  const calendarioMes = searchParams.get("mes");
+
+  function voltarParaCalendarioSePreciso() {
+    if (!veioDoCalendario) return false;
+
+    const a = calendarioAno ? Number(calendarioAno) : new Date().getFullYear();
+    const m = calendarioMes ? Number(calendarioMes) : (new Date().getMonth() + 1);
+
+    navigate(`/calendario?ano=${a}&mes=${m}`);
+    return true;
+  }
+
   useEffect(() => {
     carregarServicos();
     carregarClientes();
   }, []);
+
+  // ✅ Pré-preenche data se vier do calendário: /servicos?data=YYYY-MM-DD
+  useEffect(() => {
+    const dataParam = searchParams.get("data");
+    if (dataParam) {
+      setFormData((prev) => ({
+        ...prev,
+        data_contratacao: dataParam,
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // ✅ Abre edição automática se vier do calendário: /servicos?edit=ID
+  const lastEditRef = useRef(null);
+  useEffect(() => {
+    const editParam = searchParams.get("edit");
+    if (editParam) {
+      const idNum = Number(editParam);
+      if (Number.isFinite(idNum) && String(lastEditRef.current) !== String(idNum)) {
+        lastEditRef.current = idNum;
+        abrirEdicao(idNum);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     const total =
@@ -158,6 +199,9 @@ export default function Servicos() {
       });
       setEquipKey((k) => k + 1);
       await carregarServicos();
+
+      // ✅ volta para calendário se veio de lá
+      if (voltarParaCalendarioSePreciso()) return;
     } catch (err) {
       const data = err?.response?.data;
       let msg = err?.message || "Erro desconhecido";
@@ -236,6 +280,9 @@ export default function Servicos() {
       setModalOpen(false);
       setServicoEditando(null);
       await carregarServicos();
+
+      // ✅ volta para calendário se veio de lá
+      if (voltarParaCalendarioSePreciso()) return;
     } catch (err) {
       const data = err?.response?.data;
       let msg = err.message;
@@ -250,6 +297,9 @@ export default function Servicos() {
     if (!window.confirm("Tem certeza que deseja excluir este serviço?")) return;
     await api.delete(`/servicos/${id}`);
     await carregarServicos();
+
+    // ✅ volta para calendário se veio de lá
+    if (voltarParaCalendarioSePreciso()) return;
   }
 
   // 📋 filtros + ordenação
@@ -476,7 +526,7 @@ export default function Servicos() {
 
           <label className="flex items-center gap-2">
             <span className="text-gray-700">Mês:</span>
-            <select className="h-9 px-2 py-1.5 border rounded text-sm"
+            <select
               value={filtroMes}
               onChange={(e) => { setFiltroMes(e.target.value); setPage(1); }}
               className="border rounded px-2 h-9"
@@ -490,7 +540,7 @@ export default function Servicos() {
 
           <label className="flex items-center gap-2">
             <span className="text-gray-700">Status:</span>
-            <select className="h-9 px-2 py-1.5 border rounded text-sm"
+            <select
               value={filtroStatus}
               onChange={(e) => { setFiltroStatus(e.target.value); setPage(1); }}
               className="border rounded px-2 h-9"
@@ -504,7 +554,7 @@ export default function Servicos() {
 
           <label className="flex items-center gap-2">
             <span className="text-gray-700">Cliente:</span>
-            <select className="h-9 px-2 py-1.5 border rounded text-sm"
+            <select
               value={filtroCliente}
               onChange={(e) => { setFiltroCliente(e.target.value); setPage(1); }}
               className="border rounded px-2 h-9"
@@ -518,7 +568,7 @@ export default function Servicos() {
 
           <label className="flex items-center gap-2">
             <span className="text-gray-700">Tipo:</span>
-            <select className="h-9 px-2 py-1.5 border rounded text-sm"
+            <select
               value={filtroTipo}
               onChange={(e) => { setFiltroTipo(e.target.value); setPage(1); }}
               className="border rounded px-2 h-9"
@@ -542,7 +592,7 @@ export default function Servicos() {
                 <th className="text-right p-2">Total</th>
                 <th className="text-right p-2">Desconto</th>
                 <th className="text-right p-2">Final</th>
-				<th className="p-2 text-right whitespace-nowrap min-w-[100px]">A Receber</th>
+                <th className="p-2 text-right whitespace-nowrap min-w-[100px]">A Receber</th>
                 <th className="p-2 text-center w-28">Status</th>
                 <th className="p-2 text-center w-24">Ações</th>
               </tr>
@@ -559,7 +609,7 @@ export default function Servicos() {
                   <td className="p-2 text-right">{fmtBRL(s.valor_total)}</td>
                   <td className="p-2 text-right">{fmtBRL(s.valor_desconto)}</td>
                   <td className="p-2 text-right">{fmtBRL(s.valor_final)}</td>
-				  <td className="p-2 text-right">{fmtBRL(s.valor_pendente_atual ?? 0)}</td>
+                  <td className="p-2 text-right">{fmtBRL(s.valor_pendente_atual ?? 0)}</td>
                   <td className="p-2 text-center">
                     <span
                       className={`px-3 py-1 rounded-full text-sm font-semibold ${

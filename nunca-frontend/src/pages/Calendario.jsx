@@ -1,64 +1,421 @@
-import React, { useState, useEffect } from "react";
-import FullCalendar from "@fullcalendar/react";
-import timeGridPlugin from "@fullcalendar/timegrid";
-import interactionPlugin from "@fullcalendar/interaction";
-import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import IconButton from "../components/IconButton";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { api } from "../api/config";
 
-const Calendario = () => {
-  const [eventos, setEventos] = useState([]);
+const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function toISODate(d) {
+  const y = d.getFullYear();
+  const m = pad2(d.getMonth() + 1);
+  const day = pad2(d.getDate());
+  return `${y}-${m}-${day}`;
+}
+
+function parseISODate(s) {
+  if (!s) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function addDays(dateObj, n) {
+  const d = new Date(dateObj);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function startOfWeekMonday(dateObj) {
+  const d = new Date(dateObj);
+  const jsDay = d.getDay(); // 0=Dom..6=Sáb
+  const diff = (jsDay + 6) % 7; // Seg=0, Ter=1, ... Dom=6
+  d.setDate(d.getDate() - diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfWeekSunday(dateObj) {
+  const start = startOfWeekMonday(dateObj);
+  const end = addDays(start, 6);
+  end.setHours(0, 0, 0, 0);
+  return end;
+}
+
+function startOfMonth(dateObj) {
+  const d = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfMonth(dateObj) {
+  const d = new Date(dateObj.getFullYear(), dateObj.getMonth() + 1, 0);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function sameDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function monthNamePt(monthIndex0) {
+  const meses = [
+    "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"
+  ];
+  return meses[monthIndex0] || "";
+}
+
+export default function Calendario() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const carregarEventos = async (inicio, fim) => {
-    try {
-      const res = await axios.get(
-        `http://localhost:8000/servicos/calendario?inicio=${inicio}&fim=${fim}`
-      );
-      const data = res.data.map((servico) => ({
-        id: servico.id,
-        title: `${servico.cliente?.nome ?? "Cliente"} - ${servico.descricao ?? ""}`,
-        start: servico.data_inicio,
-        end: servico.data_fim,
-      }));
-      setEventos(data);
-    } catch (error) {
-      console.error("Erro ao carregar serviços:", error);
+  const now = new Date();
+  const urlAno = Number(searchParams.get("ano")) || now.getFullYear();
+  const urlMes = Number(searchParams.get("mes")) || (now.getMonth() + 1);
+
+  const [ano, setAno] = useState(urlAno);
+  const [mes, setMes] = useState(urlMes); // 1-12
+  const [servicos, setServicos] = useState([]);
+
+  // Mantém state sincronizado com URL quando usuário navega por histórico/refresh
+  useEffect(() => {
+    setAno(urlAno);
+    setMes(urlMes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const { gridStart, gridEnd, weeks } = useMemo(() => {
+    const base = new Date(ano, mes - 1, 1);
+    const mStart = startOfMonth(base);
+    const mEnd = endOfMonth(base);
+    const gStart = startOfWeekMonday(mStart);
+    const gEnd = endOfWeekSunday(mEnd);
+
+    const allDays = [];
+    let cursor = new Date(gStart);
+    while (cursor <= gEnd) {
+      allDays.push(new Date(cursor));
+      cursor = addDays(cursor, 1);
     }
-  };
 
-  const handleRangeChange = (info) => {
-    const inicio = info.startStr.split("T")[0];
-    const fim = info.endStr.split("T")[0];
-    carregarEventos(inicio, fim);
-  };
+    const w = [];
+    for (let i = 0; i < allDays.length; i += 7) {
+      w.push(allDays.slice(i, i + 7));
+    }
 
-  const handleEventClick = (info) => {
-    navigate(`/servicos/${info.event.id}`);
-  };
+    return { gridStart: gStart, gridEnd: gEnd, weeks: w };
+  }, [ano, mes]);
 
-  const handleDateClick = (info) => {
-    navigate(`/servicos/novo?data=${info.dateStr}`);
-  };
+  async function carregarServicos() {
+    try {
+      const inicio = toISODate(gridStart);
+      const fim = toISODate(gridEnd);
+      const res = await api.get("/servicos/calendario", { params: { inicio, fim } });
+      setServicos(res.data || []);
+    } catch (err) {
+      console.error("Erro ao carregar serviços do calendário:", err);
+      setServicos([]);
+    }
+  }
+
+  useEffect(() => {
+    carregarServicos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gridStart.getTime(), gridEnd.getTime()]);
+
+  function atualizarURL(nAno, nMes) {
+    setSearchParams({ ano: String(nAno), mes: String(nMes) });
+  }
+
+  function irMes(delta) {
+    let nAno = ano;
+    let nMes = mes + delta;
+    if (nMes <= 0) { nMes = 12; nAno -= 1; }
+    if (nMes >= 13) { nMes = 1; nAno += 1; }
+    atualizarURL(nAno, nMes);
+  }
+
+  function irAno(delta) {
+    atualizarURL(ano + delta, mes);
+  }
+
+  // ---- Construção de “eventos” com regra multi-dia só para Job ----
+  const eventos = useMemo(() => {
+    return (servicos || [])
+      .map((s) => {
+        const start = parseISODate(
+          typeof s.data_contratacao === "string"
+            ? s.data_contratacao.slice(0, 10)
+            : String(s.data_contratacao).slice(0, 10)
+        ) || null;
+
+        if (!start) return null;
+
+        const isJob = String(s.tipo_servico || "").toLowerCase() === "job";
+        const nDiarias = Math.max(1, Number(s.numero_diarias) || 1);
+        const spanDays = isJob ? nDiarias : 1;
+        const end = addDays(start, spanDays - 1);
+
+        const tituloBase = `${s.cliente_nome || "Cliente"} - ${s.descricao || ""}`.trim();
+        const titulo = tituloBase.length > 45 ? `${tituloBase.slice(0, 45)}...` : tituloBase;
+
+        return {
+          id: s.id,
+          start,
+          end,
+          titulo,
+          raw: s,
+        };
+      })
+      .filter(Boolean);
+  }, [servicos]);
+
+  // Retorna eventos que intersectam um intervalo [a,b]
+  function intersects(ev, a, b) {
+    return ev.start <= b && ev.end >= a;
+  }
+
+  // Aloca “lanes” (linhas) por semana para barras multi-dia não colidirem
+  function buildWeekLayout(weekDays) {
+    const wStart = weekDays[0];
+    const wEnd = weekDays[6];
+
+    // Segmentos recortados para essa semana
+    const segs = eventos
+      .filter((ev) => intersects(ev, wStart, wEnd))
+      .map((ev) => {
+        const startIdx = Math.max(0, Math.floor((startOfDay(ev.start) - startOfDay(wStart)) / 86400000));
+        const endIdx = Math.min(6, Math.floor((startOfDay(ev.end) - startOfDay(wStart)) / 86400000));
+        const isStartHere = sameDay(ev.start, weekDays[startIdx]);
+        return {
+          ev,
+          startIdx,
+          endIdx,
+          isStartHere,
+        };
+      })
+      .sort((a, b) => (a.startIdx - b.startIdx) || ((b.endIdx - b.startIdx) - (a.endIdx - a.startIdx)));
+
+    // Greedy lane assignment
+    const lanes = []; // cada lane: array de segmentos
+    function conflicts(seg, lane) {
+      return lane.some((x) => !(seg.endIdx < x.startIdx || seg.startIdx > x.endIdx));
+    }
+    segs.forEach((seg) => {
+      let placed = false;
+      for (let i = 0; i < lanes.length; i++) {
+        if (!conflicts(seg, lanes[i])) {
+          lanes[i].push(seg);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) lanes.push([seg]);
+    });
+
+    // Normaliza ordem dentro de cada lane
+    lanes.forEach((lane) => lane.sort((a, b) => a.startIdx - b.startIdx));
+
+    return { lanes };
+  }
+
+  function startOfDay(d) {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  }
+
+  function onClickDia(dateObj) {
+    const iso = toISODate(dateObj);
+    navigate(`/servicos?data=${iso}&from=calendario&ano=${ano}&mes=${mes}`);
+  }
+
+  function onClickEvento(evId) {
+    navigate(`/servicos?edit=${evId}&from=calendario&ano=${ano}&mes=${mes}`);
+  }
+
+  const hoje = new Date();
+  const baseMes = new Date(ano, mes - 1, 1);
+
+  // Estética / dimensões das barras
+  const HEADER_H = 24; // altura do “topo” do dia
+  const BAR_H = 18;
+  const BAR_GAP = 4;
+  const WEEK_PADDING_BOTTOM = 8;
 
   return (
-    <div className="p-6">
-      <h2 className="text-xl font-bold mb-4">📅 Agenda de Serviços</h2>
-      <FullCalendar
-        plugins={[timeGridPlugin, interactionPlugin]}
-        initialView="timeGridWeek"
-        locale="pt-br"
-        firstDay={1}
-        allDaySlot={false}
-        slotMinTime="08:00:00"
-        slotMaxTime="22:00:00"
-        height="85vh"
-        events={eventos}
-        eventClick={handleEventClick}
-        dateClick={handleDateClick}
-        datesSet={handleRangeChange}
-      />
+    <div className="p-4">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <IconButton
+            icon={ChevronLeft}
+            color="gray"
+            onClick={() => irAno(-1)}
+            title="Ano anterior"
+          >
+            <ChevronLeft size={18} />
+          </IconButton>
+          <div className="text-sm font-medium w-16 text-center">{ano}</div>
+          <IconButton
+            icon={ChevronRight}
+            color="gray"
+            onClick={() => irAno(1)}
+            title="Próximo ano"
+          >
+            <ChevronRight size={18} />
+          </IconButton>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <IconButton
+            icon={ChevronLeft}
+            color="gray"
+            onClick={() => irMes(-1)}
+            title="Mês anterior"
+          >
+            <ChevronLeft size={18} />
+          </IconButton>
+          <div className="text-lg font-bold">
+            {monthNamePt(baseMes.getMonth())}
+          </div>
+          <IconButton
+            icon={ChevronRight}
+            color="gray"
+            onClick={() => irMes(1)}
+            title="Próximo mês"
+          >
+            <ChevronRight size={18} />
+          </IconButton>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => atualizarURL(hoje.getFullYear(), hoje.getMonth() + 1)}
+          className="border rounded px-3 py-2 text-sm hover:bg-gray-50"
+          title="Ir para o mês atual"
+        >
+          Hoje
+        </button>
+      </div>
+
+      {/* Cabeçalho dias da semana */}
+      <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-t overflow-hidden">
+        {WEEKDAYS.map((d) => (
+          <div key={d} className="bg-gray-50 p-2 text-xs font-semibold text-gray-700">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Semanas */}
+      <div className="bg-gray-200 gap-px grid rounded-b overflow-hidden">
+        {weeks.map((weekDays, wIdx) => {
+          const { lanes } = buildWeekLayout(weekDays);
+
+          // Altura da linha da semana: cabeçalho + barras
+          const weekHeight =
+            HEADER_H +
+            (lanes.length ? lanes.length * BAR_H + Math.max(0, lanes.length - 1) * BAR_GAP : 0) +
+            WEEK_PADDING_BOTTOM;
+
+          return (
+            <div
+              key={wIdx}
+              className="relative bg-gray-200"
+              style={{ height: weekHeight }}
+            >
+              {/* Grade de dias */}
+              <div className="grid grid-cols-7 gap-px">
+                {weekDays.map((d, idx) => {
+                  const isCurrentMonth = d.getMonth() === baseMes.getMonth();
+                  const isToday = sameDay(d, hoje);
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`bg-white p-2 cursor-pointer hover:bg-gray-50 select-none ${isCurrentMonth ? "" : "opacity-60"}`}
+                      style={{ height: weekHeight }}
+                      onClick={() => onClickDia(d)}
+                      title={`Criar serviço em ${toISODate(d)}`}
+                    >
+                      <div className="flex items-center justify-between" style={{ height: HEADER_H }}>
+                        <div
+                          className={`text-xs font-semibold ${isToday ? "text-blue-700" : "text-gray-700"}`}
+                        >
+                          {d.getDate()}
+                        </div>
+                        {isToday && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold">
+                            Hoje
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Barras (overlay) */}
+              <div className="absolute left-0 right-0 top-0 bottom-0 pointer-events-none">
+                {lanes.map((lane, laneIdx) => {
+                  return lane.map((seg) => {
+                    const colStart = seg.startIdx + 1; // grid columns are 1..7
+                    const colSpan = seg.endIdx - seg.startIdx + 1;
+
+                    const top =
+                      HEADER_H +
+                      laneIdx * (BAR_H + BAR_GAP);
+
+                    // Cor fixa estilo “tag vermelha” (como referência GC). Pode trocar depois.
+                    const bgClass = "bg-red-500";
+                    const textClass = "text-white";
+
+                    return (
+                      <div
+                        key={`${seg.ev.id}-${colStart}-${colSpan}-${laneIdx}`}
+                        className="absolute pointer-events-auto"
+                        style={{
+                          top,
+                          height: BAR_H,
+                          left: `${(seg.startIdx * 100) / 7}%`,
+                          width: `${(colSpan * 100) / 7}%`,
+                          paddingLeft: 4,
+                          paddingRight: 4,
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClickEvento(seg.ev.id);
+                        }}
+                        title={seg.ev.titulo}
+                      >
+                        <div className={`${bgClass} ${textClass} rounded-sm h-full flex items-center overflow-hidden`}>
+                          <div className="text-[11px] font-semibold truncate">
+                            {seg.isStartHere ? seg.ev.titulo : ""}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 text-xs text-gray-600">
+        Dica: clique em um dia vazio para criar um serviço nessa data; clique na tag para editar.
+        (Eventos multi-dia só para <strong>Job</strong> usando <strong>nº de diárias</strong>.)
+      </div>
     </div>
   );
-};
-
-export default Calendario;
+}
