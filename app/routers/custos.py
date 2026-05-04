@@ -16,6 +16,7 @@ def listar_custos(db: Session = Depends(get_db)):
     custos = (
         db.query(
             Custo.id,
+            Custo.servico_id,
             Custo.descricao,
             Custo.valor,
             Custo.data,
@@ -39,6 +40,31 @@ def criar_custo(custo: CustoBase, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_custo)
     return db_custo
+
+@router.put("/{custo_id}")
+def atualizar_custo(custo_id: int, custo: CustoBase, db: Session = Depends(get_db)):
+    db_custo = db.query(Custo).filter(Custo.id == custo_id).first()
+    if not db_custo:
+        raise HTTPException(status_code=404, detail="Custo não encontrado")
+    servico = db.query(Servico).filter(Servico.id == custo.servico_id).first()
+    if not servico:
+        raise HTTPException(status_code=404, detail="Serviço não encontrado")
+    db_custo.servico_id = custo.servico_id
+    db_custo.descricao = custo.descricao
+    db_custo.valor = custo.valor
+    db_custo.data = custo.data
+    db.commit()
+    db.refresh(db_custo)
+    return db_custo
+
+@router.delete("/{custo_id}")
+def deletar_custo(custo_id: int, db: Session = Depends(get_db)):
+    db_custo = db.query(Custo).filter(Custo.id == custo_id).first()
+    if not db_custo:
+        raise HTTPException(status_code=404, detail="Custo não encontrado")
+    db.delete(db_custo)
+    db.commit()
+    return {"ok": True}
 
 @router.get("/periodo")
 def listar_custos_periodo(

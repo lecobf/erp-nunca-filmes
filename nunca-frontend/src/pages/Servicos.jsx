@@ -14,7 +14,7 @@ export default function Servicos() {
   const [servicos, setServicos] = useState([]);
   const [clientes, setClientes] = useState([]);
 
-  const [filtroAno, setFiltroAno] = useState(new Date().getFullYear());
+  const [filtroAno, setFiltroAno] = useState(String(new Date().getFullYear()));
   const [filtroMes, setFiltroMes] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("");
   const [filtroCliente, setFiltroCliente] = useState("");
@@ -516,12 +516,16 @@ export default function Servicos() {
         <div className="flex flex-wrap gap-3 items-center mb-4 text-sm">
           <label className="flex items-center gap-2">
             <span className="text-gray-700">Ano:</span>
-            <input
-              type="number"
+            <select
               value={filtroAno}
               onChange={(e) => { setFiltroAno(e.target.value); setPage(1); }}
-              className="border rounded px-2 h-9 w-24"
-            />
+              className="border rounded px-2 h-9"
+            >
+              <option value="">Todos</option>
+              {[2023, 2024, 2025, 2026].map((a) => (
+                <option key={a} value={String(a)}>{a}</option>
+              ))}
+            </select>
           </label>
 
           <label className="flex items-center gap-2">
@@ -593,6 +597,7 @@ export default function Servicos() {
                 <th className="text-right p-2">Desconto</th>
                 <th className="text-right p-2">Final</th>
                 <th className="p-2 text-right whitespace-nowrap min-w-[100px]">A Receber</th>
+                <th className="p-2 text-center whitespace-nowrap">Dt. Pagamento</th>
                 <th className="p-2 text-center w-28">Status</th>
                 <th className="p-2 text-center w-24">Ações</th>
               </tr>
@@ -610,6 +615,7 @@ export default function Servicos() {
                   <td className="p-2 text-right">{fmtBRL(s.valor_desconto)}</td>
                   <td className="p-2 text-right">{fmtBRL(s.valor_final)}</td>
                   <td className="p-2 text-right">{fmtBRL(s.valor_pendente_atual ?? 0)}</td>
+                  <td className="p-2 text-center">{s.data_ultimo_pagamento ? fmtDateBR(s.data_ultimo_pagamento) : ""}</td>
                   <td className="p-2 text-center">
                     <span
                       className={`px-3 py-1 rounded-full text-sm font-semibold ${
@@ -648,7 +654,7 @@ export default function Servicos() {
               ))}
               {pageSlice.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="p-6 text-center text-gray-500">
+                  <td colSpan={10} className="p-6 text-center text-gray-500">
                     Nenhum serviço encontrado.
                   </td>
                 </tr>

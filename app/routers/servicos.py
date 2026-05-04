@@ -103,6 +103,7 @@ def listar_servicos(
         cliente = db.query(Cliente).filter(Cliente.id == s.cliente_id).first()
         valor_a_receber = max((s.valor_final or 0.0) - soma_pag, 0.0)
         lucro_liquido = (s.valor_final or 0.0) - soma_custos
+        data_ultimo_pagamento = db.query(func.max(Pagamento.data_pagamento)).filter(Pagamento.servico_id == s.id).scalar()
 
         resultado.append({
             "id": s.id,
@@ -123,6 +124,7 @@ def listar_servicos(
             "lucro_liquido": lucro_liquido,
             "is_pacote": s.is_pacote,
             "valor_pendente_atual": s.valor_pendente_atual,
+            "data_ultimo_pagamento": data_ultimo_pagamento,
         })
     return resultado
 

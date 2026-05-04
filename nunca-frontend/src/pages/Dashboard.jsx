@@ -81,133 +81,122 @@ export default function Dashboard() {
     style: "currency",
     currency: "BRL",
   });
-  const totalAReceber = dados?.geral?.a_receber_periodo?.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
+  const totalAReceber = (
+    (dados?.geral?.a_receber_periodo || 0) + (dados?.geral?.a_receber_retroativo || 0)
+  ).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
-    <div style={{ padding: "30px", width: "100%", height: "100%", background: "#f7f9fc" }}>
-      <h1 style={{ textAlign: "center", marginBottom: "20px" }}>Dashboard Financeiro</h1>
+    <div className="p-4 md:p-6 bg-gray-50 min-h-full">
+      <h1 className="text-xl md:text-2xl font-bold text-center mb-4">Dashboard Financeiro</h1>
 
-      {/* 🔹 Filtro de ano */}
-      <div style={{ textAlign: "center", marginBottom: "20px" }}>
-        <label>
-          <strong>Selecione o ano:</strong>{" "}
+      {/* Filtro de ano */}
+      <div className="flex justify-center mb-5">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <span>Ano:</span>
           <select
             value={anoSelecionado}
             onChange={(e) => setAnoSelecionado(e.target.value)}
-            style={{ padding: "5px 10px", fontSize: "16px" }}
+            className="border rounded px-3 py-1.5 text-sm"
           >
             {[2023, 2024, 2025, 2026].map((ano) => (
-              <option key={ano} value={ano}>
-                {ano}
-              </option>
+              <option key={ano} value={ano}>{ano}</option>
             ))}
           </select>
         </label>
       </div>
 
-      {/* 🔹 Cards de resumo */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "20px",
-          marginBottom: "40px",
-        }}
-      >
+      {/* Cards de resumo */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5 mb-8">
         <Card titulo="Receita Prevista" valor={totalPrevista} cor="#007bff" />
         <Card titulo="Receita Recebida" valor={totalRecebida} cor="#28a745" />
         <Card titulo="Lucro Líquido" valor={totalLucro} cor="#17a2b8" />
         <Card titulo="A Receber" valor={totalAReceber} cor="#ffc107" />
       </div>
 
-      {/* 🔹 Gráfico 1 - Barras */}
-      <div style={{ width: "100%", height: "400px", marginBottom: "50px" }}>
-        <h3 style={{ textAlign: "center", marginBottom: "10px" }}>
+      {/* Gráfico 1 - Barras */}
+      <div className="w-full mb-10">
+        <h3 className="text-center text-sm md:text-base font-semibold mb-2">
           Receita Prevista × Receita Recebida (Barras)
         </h3>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={dataGrafico}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="receita_prevista" fill="#007bff" name="Prevista" />
-            <Bar dataKey="receita_recebida" fill="#ff7300" name="Recebida" />
-          </BarChart>
-        </ResponsiveContainer>
+        <div style={{ height: "300px" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={dataGrafico}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={70} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="receita_prevista" fill="#007bff" name="Prevista" />
+              <Bar dataKey="receita_recebida" fill="#ff7300" name="Recebida" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
-      {/* 🔹 Gráfico 2 - Linhas */}
-      <div style={{ width: "100%", height: "400px", marginBottom: "50px" }}>
-        <h3 style={{ textAlign: "center", marginBottom: "10px" }}>
+      {/* Gráfico 2 - Linhas */}
+      <div className="w-full mb-10">
+        <h3 className="text-center text-sm md:text-base font-semibold mb-2">
           Receita Prevista × Receita Recebida (Linhas)
         </h3>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={dataGrafico}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="mes" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line type="monotone" dataKey="receita_prevista" stroke="#007bff" name="Prevista" />
-            <Line type="monotone" dataKey="receita_recebida" stroke="#ff7300" name="Recebida" />
-          </LineChart>
-        </ResponsiveContainer>
+        <div style={{ height: "300px" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={dataGrafico}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={70} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="receita_prevista" stroke="#007bff" name="Prevista" />
+              <Line type="monotone" dataKey="receita_recebida" stroke="#ff7300" name="Recebida" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
-      {/* 🔹 Gráfico 3 - Pizza */}
-      <div style={{ width: "100%", height: "400px", marginBottom: "50px" }}>
-        <h3 style={{ textAlign: "center", marginBottom: "10px" }}>
+      {/* Gráfico 3 - Pizza */}
+      <div className="w-full mb-10">
+        <h3 className="text-center text-sm md:text-base font-semibold mb-2">
           Top 5 Clientes por Pagamentos
         </h3>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={dataPie}
-              cx="50%"
-              cy="50%"
-              labelLine={false}
-              label={({ name, value }) => `${name}: ${value.toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-              })}`}
-              outerRadius={150}
-              fill="#8884d8"
-              dataKey="value"
-            >
-              {dataPie.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
-              ))}
-            </Pie>
-            <Tooltip />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
+        <div style={{ height: "320px" }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={dataPie}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={false}
+                outerRadius="60%"
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {dataPie.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(value) =>
+                  value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                }
+              />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );
 }
 
-// 🔹 Componente de Card
 function Card({ titulo, valor, cor }) {
   return (
     <div
-      style={{
-        backgroundColor: cor,
-        color: "white",
-        borderRadius: "10px",
-        padding: "20px",
-        textAlign: "center",
-        fontWeight: "bold",
-        boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
-      }}
+      style={{ backgroundColor: cor }}
+      className="text-white rounded-xl p-4 text-center font-bold shadow"
     >
-      <h4 style={{ marginBottom: "10px" }}>{titulo}</h4>
-      <h2>{valor}</h2>
+      <p className="text-xs md:text-sm mb-1 opacity-90">{titulo}</p>
+      <p className="text-base md:text-xl leading-tight">{valor}</p>
     </div>
   );
 }
