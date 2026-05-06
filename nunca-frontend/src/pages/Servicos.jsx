@@ -333,8 +333,8 @@ export default function Servicos() {
           </p>
           <div className="grid grid-cols-12 gap-x-3 gap-y-3">
 
-            {/* Tipo */}
-            <label className="col-span-6 md:col-span-2 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            {/* Linha 1: Tipo + Cliente + Descrição */}
+            <label className="col-span-2 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Tipo
               <select value={formData.tipo_servico} className="w-full"
                 onChange={(e) => setFormData({ ...formData, tipo_servico: e.target.value })}>
@@ -343,8 +343,7 @@ export default function Servicos() {
               </select>
             </label>
 
-            {/* Cliente */}
-            <label className="col-span-12 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            <label className="col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Cliente
               <select value={formData.cliente_id} className="w-full"
                 onChange={(e) => setFormData({ ...formData, cliente_id: e.target.value })}>
@@ -353,7 +352,13 @@ export default function Servicos() {
               </select>
             </label>
 
-            {/* Datas de trabalho */}
+            <label className="col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Descrição
+              <input type="text" value={formData.descricao} placeholder="Ex: Job Coca-Cola SP" className="w-full"
+                onChange={(e) => setFormData({ ...formData, descricao: e.target.value })} />
+            </label>
+
+            {/* Linha 2: Datas de trabalho */}
             <div className="col-span-12 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Datas de Trabalho *
               <div className="flex flex-wrap items-center gap-1.5 min-h-[34px] border border-neutral-300 rounded px-2 py-1.5 bg-white">
@@ -372,25 +377,18 @@ export default function Servicos() {
               </span>
             </div>
 
-            {/* Descrição */}
-            <label className="col-span-12 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Descrição
-              <input type="text" value={formData.descricao} placeholder="Ex: Job Coca-Cola SP" className="w-full"
-                onChange={(e) => setFormData({ ...formData, descricao: e.target.value })} />
-            </label>
-
-            {/* Valor Cachê */}
+            {/* Linha 3: Cachê (Job) + Equipamentos */}
             {formData.tipo_servico === "Job" && (
-              <label className="col-span-12 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              <label className="col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
                 Valor Diária Cachê
                 <CurrencyInput value={formData.valor_diaria_cache}
                   onChange={(val) => setFormData({ ...formData, valor_diaria_cache: val })} />
               </label>
             )}
 
-            {/* Equipamentos */}
-            <div className="col-span-12 md:col-span-5 md:col-start-4 text-sm">
-              <CampoEquipamentos key={equipKey} showLabel={true}
+            <div className={`${formData.tipo_servico === "Job" ? "col-span-5" : "col-span-8"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
+              Valor Diária Equipamentos
+              <CampoEquipamentos key={equipKey} showLabel={false}
                 valor={Number(formData.valor_diaria_equipamentos) || 0}
                 pacoteInicial={formData.is_pacote}
                 onValorChange={(val) => setFormData((prev) => prev.valor_diaria_equipamentos === val ? prev : { ...prev, valor_diaria_equipamentos: val })}
@@ -399,27 +397,27 @@ export default function Servicos() {
               />
             </div>
 
-            {/* Totais */}
-            <label className="col-span-12 sm:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            {/* Linha 4: Totais + Previsão + Salvar */}
+            <label className="col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Valor Total
               <input type="text" value={fmtBRL(formData.valor_total)} readOnly className="w-full bg-neutral-50" />
             </label>
-            <label className="col-span-12 sm:col-span-4 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            <label className="col-span-2 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Desconto
               <CurrencyInput value={formData.valor_desconto}
                 onChange={(val) => setFormData({ ...formData, valor_desconto: val })} />
             </label>
-            <label className="col-span-12 sm:col-span-4 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            <label className="col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Valor Final
               <input type="text" value={fmtBRL(formData.valor_final)} readOnly className="w-full bg-neutral-50" />
             </label>
-            <label className="col-span-12 sm:col-span-6 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            <label className="col-span-2 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Previsão Pgto
-              <DateInput className="w-full" value={formData.data_previsao_pagamento || ""}
+              <DateInput value={formData.data_previsao_pagamento || ""}
                 onChange={(d) => setFormData((prev) => ({ ...prev, data_previsao_pagamento: d }))} />
             </label>
-            <div className="col-span-12 sm:col-span-6 md:col-span-3 flex items-end justify-end">
-              <button type="submit" className="btn-primary w-full md:w-auto">
+            <div className="col-span-2 flex items-end">
+              <button type="submit" className="btn-primary w-full">
                 <Plus size={14} />
                 Salvar Serviço
               </button>
