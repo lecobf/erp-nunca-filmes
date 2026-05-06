@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/config";
 import { fmtBRL, fmtDateBR } from "../utils/formatters";
 import Modal from "../components/Modal";
