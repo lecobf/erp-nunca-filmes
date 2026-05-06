@@ -404,7 +404,7 @@ export default function Servicos() {
               </span>
             </div>
 
-            {/* Linha 3: Cachê (Job) + Equipamentos + Pacote */}
+            {/* Linha 3: Cachê [3] + Equipamentos+Pacote [5] + spacer [4] = 12 cols */}
             {formData.tipo_servico === "Job" && (
               <label className="col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
                 Valor Diária Cachê
@@ -413,35 +413,36 @@ export default function Servicos() {
               </label>
             )}
 
-            <label className={`${formData.tipo_servico === "Job" ? "col-span-4" : "col-span-7"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
+            <label className={`${formData.tipo_servico === "Job" ? "col-span-5" : "col-span-8"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
               Valor Diária Equipamentos
-              <div className="relative">
-                <CurrencyInput
-                  value={Number(formData.valor_diaria_equipamentos) || 0}
-                  readOnly={!formData.is_pacote}
-                  onChange={(val) => setFormData((prev) => ({ ...prev, valor_diaria_equipamentos: val }))}
-                  className="w-full pr-10"
-                />
-                <button type="button" disabled={formData.is_pacote} onClick={() => setModalEquipOpen(true)}
-                  title="Selecionar equipamentos"
-                  className={`absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded ${formData.is_pacote ? "bg-neutral-300 text-neutral-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}>
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>
-                  </svg>
-                </button>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <CurrencyInput
+                    value={Number(formData.valor_diaria_equipamentos) || 0}
+                    readOnly={!formData.is_pacote}
+                    onChange={(val) => setFormData((prev) => ({ ...prev, valor_diaria_equipamentos: val }))}
+                    className="w-full pr-10"
+                  />
+                  <button type="button" disabled={formData.is_pacote} onClick={() => setModalEquipOpen(true)}
+                    title="Selecionar equipamentos"
+                    className={`absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded ${formData.is_pacote ? "bg-neutral-300 text-neutral-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}>
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>
+                    </svg>
+                  </button>
+                </div>
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap border border-neutral-300 rounded px-2 text-neutral-600">
+                  <input type="checkbox" checked={formData.is_pacote}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData((prev) => ({ ...prev, is_pacote: checked, valor_diaria_equipamentos: checked ? prev.valor_diaria_equipamentos : 0, equipamentos: checked ? [] : prev.equipamentos }));
+                    }} />
+                  Pacote
+                </label>
               </div>
             </label>
 
-            <label className="col-span-1 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Pacote
-              <div className="flex items-center border border-neutral-300 rounded px-2 h-[34px]">
-                <input type="checkbox" checked={formData.is_pacote}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setFormData((prev) => ({ ...prev, is_pacote: checked, valor_diaria_equipamentos: checked ? prev.valor_diaria_equipamentos : 0, equipamentos: checked ? [] : prev.equipamentos }));
-                  }} />
-              </div>
-            </label>
+            <div className={`${formData.tipo_servico === "Job" ? "col-span-4" : "col-span-4"}`} />
 
             {/* Linha 4: Totais + Previsão + Salvar */}
             <label className="col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
@@ -673,33 +674,32 @@ export default function Servicos() {
             )}
 
             {/* Equipamentos */}
-            <label className={`${servicoEditando?.tipo_servico === "Job" ? "col-span-4" : "col-span-7"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
+            <label className={`${servicoEditando?.tipo_servico === "Job" ? "col-span-5" : "col-span-8"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
               Valor Diária Equipamentos
-              <div className="relative">
-                <CurrencyInput
-                  value={Number(servicoEditando?.valor_diaria_equipamentos) || 0}
-                  readOnly={!servicoEditando?.is_pacote}
-                  onChange={(val) => setServicoEditando((prev) => ({ ...prev, valor_diaria_equipamentos: val }))}
-                  className="w-full pr-10"
-                />
-                <button type="button" disabled={servicoEditando?.is_pacote} onClick={() => setModalEquipEditOpen(true)}
-                  title="Selecionar equipamentos"
-                  className={`absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded ${servicoEditando?.is_pacote ? "bg-neutral-300 text-neutral-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}>
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>
-                  </svg>
-                </button>
-              </div>
-            </label>
-
-            <label className="col-span-1 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Pacote
-              <div className="flex items-center border border-neutral-300 rounded px-2 h-[34px]">
-                <input type="checkbox" checked={!!servicoEditando?.is_pacote}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setServicoEditando((prev) => ({ ...prev, is_pacote: checked, valor_diaria_equipamentos: checked ? prev.valor_diaria_equipamentos : 0, equipamentos: checked ? [] : prev.equipamentos }));
-                  }} />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <CurrencyInput
+                    value={Number(servicoEditando?.valor_diaria_equipamentos) || 0}
+                    readOnly={!servicoEditando?.is_pacote}
+                    onChange={(val) => setServicoEditando((prev) => ({ ...prev, valor_diaria_equipamentos: val }))}
+                    className="w-full pr-10"
+                  />
+                  <button type="button" disabled={servicoEditando?.is_pacote} onClick={() => setModalEquipEditOpen(true)}
+                    title="Selecionar equipamentos"
+                    className={`absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded ${servicoEditando?.is_pacote ? "bg-neutral-300 text-neutral-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}>
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>
+                    </svg>
+                  </button>
+                </div>
+                <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap border border-neutral-300 rounded px-2 text-neutral-600">
+                  <input type="checkbox" checked={!!servicoEditando?.is_pacote}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setServicoEditando((prev) => ({ ...prev, is_pacote: checked, valor_diaria_equipamentos: checked ? prev.valor_diaria_equipamentos : 0, equipamentos: checked ? [] : prev.equipamentos }));
+                    }} />
+                  Pacote
+                </label>
               </div>
             </label>
 
