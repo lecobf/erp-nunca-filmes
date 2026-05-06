@@ -102,10 +102,9 @@ export default function CampoEquipamentos({
   }
 
   return (
-  <div className="flex flex-col gap-2">
-    {/* Título acima, sem checkbox aqui */}
+  <div className="flex flex-col gap-1">
     {showLabel && (
-      <span className="block mb-1 text-sm font-medium">
+      <span className="text-xs font-medium text-neutral-600">
         Valor Diária Equipamentos
       </span>
     )}
@@ -118,7 +117,7 @@ export default function CampoEquipamentos({
       value={Number(valorLocal) || 0}
       onChange={(val) => handleValorManualMudou(val)}
       readOnly={!isPacote}
-      className={`h-10 w-full pr-12 ${!isPacote ? "bg-gray-100" : ""}`} // 👈 espaço p/ o botão
+      className={`w-full pr-10 ${!isPacote ? "bg-neutral-50" : ""}`}
     />
 
     {/* Botão sobre o canto direito do input */}
@@ -128,19 +127,13 @@ export default function CampoEquipamentos({
       onClick={handleAbrirModal}
       title="Selecionar equipamentos"
       aria-label="Selecionar equipamentos"
-      className={`absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 flex items-center justify-center rounded ${
+      className={`absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded ${
         isPacote
-          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-          : "bg-blue-600 hover:bg-blue-700 text-white"
+          ? "bg-neutral-300 text-neutral-400 cursor-not-allowed"
+          : "bg-primary-600 hover:bg-primary-700 text-white"
       }`}
     >
-      <svg
-        viewBox="0 0 24 24"
-        className="h-4 w-4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
+      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
         <rect x="3" y="4" width="18" height="14" rx="2"></rect>
         <path d="M7 8h10M7 12h10M7 16h6"></path>
       </svg>
@@ -150,7 +143,7 @@ export default function CampoEquipamentos({
   {/* Chip Pacote no final */}
   <label
     title="Marque para editar valor manualmente"
-    className="whitespace-nowrap flex items-center gap-2 text-xs cursor-pointer select-none px-2 h-10 rounded border"
+    className="whitespace-nowrap flex items-center gap-1.5 text-xs cursor-pointer select-none px-2 py-1.5 rounded border border-neutral-300 text-neutral-600"
   >
     <input
       type="checkbox"
