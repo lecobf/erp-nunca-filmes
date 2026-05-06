@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { API_BASE_URL } from "./api/config";
 import {
   LayoutDashboard, Briefcase, Users, DollarSign,
   TrendingDown, Camera, Calendar, Settings, LogOut, X,
@@ -98,7 +99,7 @@ function PerfilModal({ onClose, onNomeAtualizado }) {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/auth/me", {
+      const res = await fetch(`${API_BASE_URL}/auth/me`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

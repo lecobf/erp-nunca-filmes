@@ -75,7 +75,7 @@ app = FastAPI(title="ERP Backend", version="1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://erp-nunca-filmes-1.onrender.com",
+        "https://nuncafilmes.duckdns.org",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],
@@ -110,12 +110,12 @@ async def ensure_cors(request, call_next):
     """
     Garante CORS válido para qualquer ambiente:
     - Local (http://localhost:5173)
-    - Produção (https://erp-nunca-filmes-1.onrender.com)
+    - Produção (https://nuncafilmes.duckdns.org)
     """
     response = await call_next(request)
 
     # Detecta ambiente de execução
-    allowed_origin = "https://erp-nunca-filmes-1.onrender.com"
+    allowed_origin = "https://nuncafilmes.duckdns.org"
     if "localhost" in request.headers.get("origin", "") or "127.0.0.1" in request.headers.get("origin", ""):
         allowed_origin = request.headers.get("origin", allowed_origin)
 
