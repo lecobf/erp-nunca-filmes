@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import IconButton from "../components/IconButton";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -148,35 +148,27 @@ export default function Calendario() {
     atualizarURL(ano + delta, mes);
   }
 
-  // ---- Construção de “eventos” com regra multi-dia só para Job ----
+  // ---- Eventos: um por data cadastrada no servico ----
   const eventos = useMemo(() => {
-    return (servicos || [])
-      .map((s) => {
+    const evs = [];
+    (servicos || []).forEach((s) => {
+      const tituloBase = (s.cliente_nome || "Cliente") + " - " + (s.descricao || "");
+      const titulo = tituloBase.trim().length > 55 ? tituloBase.trim().slice(0, 55) + "..." : tituloBase.trim();
+
+      // Usa array de datas especificas; fallback para data_contratacao em registros antigos
+      const datasArr = Array.isArray(s.datas) && s.datas.length > 0
+        ? s.datas
+        : [s.data_contratacao];
+
+      datasArr.forEach((d) => {
         const start = parseISODate(
-          typeof s.data_contratacao === "string"
-            ? s.data_contratacao.slice(0, 10)
-            : String(s.data_contratacao).slice(0, 10)
-        ) || null;
-
-        if (!start) return null;
-
-        const isJob = String(s.tipo_servico || "").toLowerCase() === "job";
-        const nDiarias = Math.max(1, Number(s.numero_diarias) || 1);
-        const spanDays = isJob ? nDiarias : 1;
-        const end = addDays(start, spanDays - 1);
-
-        const tituloBase = `${s.cliente_nome || "Cliente"} - ${s.descricao || ""}`.trim();
-        const titulo = tituloBase.length > 55 ? `${tituloBase.slice(0, 55)}...` : tituloBase;
-
-        return {
-          id: s.id,
-          start,
-          end,
-          titulo,
-          raw: s,
-        };
-      })
-      .filter(Boolean);
+          typeof d === "string" ? d.slice(0, 10) : String(d).slice(0, 10)
+        );
+        if (!start) return;
+        evs.push({ id: s.id, start, end: start, titulo, raw: s });
+      });
+    });
+    return evs;
   }, [servicos]);
 
   // Retorna eventos que intersectam um intervalo [a,b]
@@ -184,7 +176,7 @@ export default function Calendario() {
     return ev.start <= b && ev.end >= a;
   }
 
-  // Aloca “lanes” (linhas) por semana para barras multi-dia não colidirem
+  // Aloca "lanes" (linhas) por semana para barras multi-dia não colidirem
   function buildWeekLayout(weekDays) {
     const wStart = weekDays[0];
     const wEnd = weekDays[6];
@@ -413,8 +405,7 @@ export default function Calendario() {
       </div>
 
       <div className="mt-3 text-xs text-gray-600">
-        Dica: clique em um dia vazio para criar um serviço nessa data; clique na tag para editar.
-        (Eventos multi-dia só para <strong>Job</strong> usando <strong>nº de diárias</strong>.)
+        Dica: clique em um dia vazio para criar um serviço nessa data; clique na barra colorida para editar.
       </div>
     </div>
   );

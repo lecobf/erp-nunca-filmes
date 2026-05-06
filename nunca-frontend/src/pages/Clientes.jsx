@@ -2,77 +2,54 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/config";
 import Modal from "../components/Modal";
 import IconButton from "../components/IconButton";
-import { Pencil, Trash2 } from "lucide-react";
+import SortTh from "../components/SortTh";
+import { useSortTable } from "../hooks/useSortTable";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, UserPlus } from "lucide-react";
 import { formatCpfCnpj, formatPhone } from "../utils/formatters";
 
-// Helper local: remove tudo que não for dígito
 const onlyDigits = (s) => (s || "").toString().replace(/\D+/g, "");
 
 export default function Clientes() {
   const [clientes, setClientes] = useState([]);
   const [termo, setTermo] = useState("");
-
-  // formulário de inclusão
-  const [form, setForm] = useState({
-    nome: "",
-    cpf_cnpj: "",
-    email: "",
-    telefone: "",
-  });
-
-  // edição
+  const [form, setForm] = useState({ nome: "", cpf_cnpj: "", email: "", telefone: "" });
   const [editando, setEditando] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-
-  // paginação (client-side)
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // ---------- carregamento ----------
   async function carregarClientes(search = "") {
     try {
-      const res = await api.get("/clientes", {
-        params: search ? { search } : {},
-      });
+      const res = await api.get("/clientes", { params: search ? { search } : {} });
       setClientes(res.data || []);
     } catch (err) {
       console.error("Erro ao carregar clientes:", err);
     }
   }
 
-  useEffect(() => {
-    carregarClientes();
-  }, []);
+  useEffect(() => { carregarClientes(); }, []);
+  useEffect(() => { carregarClientes(termo.trim()); setPage(1); }, [termo]);
 
-  // busca no backend quando o termo muda
-  useEffect(() => {
-    carregarClientes(termo.trim());
-    setPage(1);
-  }, [termo]);
-
-  // ---------- submit / crud ----------
   async function handleSubmit(e) {
     e.preventDefault();
-    const payload = {
+    await api.post("/clientes", {
       nome: form.nome?.trim() || "",
-      cpf_cnpj: onlyDigits(form.cpf_cnpj), // strip para salvar limpo
+      cpf_cnpj: onlyDigits(form.cpf_cnpj),
       email: form.email?.trim() || "",
-      telefone: onlyDigits(form.telefone), // strip para salvar limpo
-    };
-    await api.post("/clientes", payload);
+      telefone: onlyDigits(form.telefone),
+    });
     setForm({ nome: "", cpf_cnpj: "", email: "", telefone: "" });
     await carregarClientes(termo.trim());
   }
 
   async function handleSalvarEdicao() {
     if (!editando?.id) return;
-    const payload = {
+    await api.put(`/clientes/${editando.id}`, {
       nome: editando.nome?.trim() || "",
-      cpf_cnpj: onlyDigits(editando.cpf_cnpj), // strip
+      cpf_cnpj: onlyDigits(editando.cpf_cnpj),
       email: editando.email?.trim() || "",
-      telefone: onlyDigits(editando.telefone), // strip
-    };
-    await api.put(`/clientes/${editando.id}`, payload);
+      telefone: onlyDigits(editando.telefone),
+    });
     setModalOpen(false);
     setEditando(null);
     await carregarClientes(termo.trim());
@@ -84,294 +61,225 @@ export default function Clientes() {
     await carregarClientes(termo.trim());
   }
 
-  // ---------- paginação ----------
-  const totalRecords = clientes.length;
+  const { sorted, sortConfig, handleSort } = useSortTable(clientes);
+
+  const totalRecords = sorted.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / Math.max(1, pageSize)));
 
-  useEffect(() => {
-    setPage((p) => Math.min(p, totalPages));
-  }, [totalPages]);
+  useEffect(() => { setPage((p) => Math.min(p, totalPages)); }, [totalPages]);
 
   const pageSlice = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return clientes.slice(start, start + pageSize);
-  }, [clientes, page, pageSize]);
+    return sorted.slice(start, start + pageSize);
+  }, [sorted, page, pageSize]);
+
+  const goTo = (p) => setPage(Math.max(1, Math.min(p, totalPages)));
 
   return (
-    <div className="p-4">
-      <h2 className="text-2xl font-bold mb-6">Clientes</h2>
-
-      {/* FORM DE INCLUSÃO */}
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-4 rounded shadow grid grid-cols-12 gap-x-2 gap-y-3 mb-4"
-      >
-        <label className="col-span-12 md:col-span-4 text-sm">
-          <span className="mb-1 block font-medium">Nome</span>
-          <input
-            type="text"
-            value={form.nome}
-            onChange={(e) => setForm({ ...form, nome: e.target.value })}
-            className="border rounded p-2 h-10 w-full"
-            placeholder="Nome do cliente"
-            required
-          />
-        </label>
-
-        {/* ↓ Reduzi para 2 colunas para abrir espaço ao telefone */}
-        <label className="col-span-12 md:col-span-2 text-sm">
-          <span className="mb-1 block font-medium">CPF/CNPJ</span>
-          <input
-            type="text"
-            value={form.cpf_cnpj}
-            onChange={(e) =>
-              setForm({ ...form, cpf_cnpj: formatCpfCnpj(e.target.value) })
-            }
-            className="border rounded p-2 h-10 w-full"
-            placeholder="CPF/CNPJ"
-          />
-        </label>
-
-        <label className="col-span-12 md:col-span-3 text-sm">
-          <span className="mb-1 block font-medium">Email</span>
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            className="border rounded p-2 h-10 w-full"
-            placeholder="email@dominio.com"
-          />
-        </label>
-
-        {/* ↑ Aumentei para 3 colunas para o telefone caber junto do botão */}
-        <div className="col-span-12 md:col-span-3 text-sm">
-          <span className="mb-1 block font-medium">Telefone</span>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={form.telefone}
-              onChange={(e) =>
-                setForm({ ...form, telefone: formatPhone(e.target.value) })
-              }
-              className="border rounded p-2 h-10 w-full"
-              placeholder="(11) 99999-9999"
-            />
-            <button
-              type="submit"
-              className="bg-blue-600 text-white px-3 py-2 rounded text-sm shrink-0"
-            >
-              Adicionar
-            </button>
-          </div>
-        </div>
-      </form>
-
-      {/* BUSCA */}
-      <div className="bg-white p-4 rounded shadow mb-3">
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="Buscar por nome, email ou telefone…"
-            value={termo}
-            onChange={(e) => setTermo(e.target.value)}
-            className="border p-2 rounded h-10 w-full md:w-96"
-          />
-        </div>
+    <>
+      {/* Cabeçalho */}
+      <div className="page-header">
+        <h1 className="page-title">Clientes</h1>
       </div>
 
-      {/* TABELA */}
-      <div className="bg-white rounded shadow">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {/* sem ID */}
-                <th className="p-2 text-left">Nome</th>
-                <th className="p-2 text-left">CPF/CNPJ</th>
-                <th className="p-2 text-left">Email</th>
-                <th className="p-2 text-left">Telefone</th>
-                <th className="p-2 text-center w-24">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageSlice.map((c) => (
-                <tr key={c.id} className="border-t hover:bg-gray-50">
-                  <td className="p-2">{c.nome || "-"}</td>
-                  <td className="p-2">{formatCpfCnpj(c.cpf_cnpj || "")}</td>
-                  <td className="p-2">{c.email || "-"}</td>
-                  <td className="p-2">{formatPhone(c.telefone || "")}</td>
-                  <td className="p-2">
-                    <div className="flex items-center justify-center gap-2">
-                      <IconButton
-                        icon={Pencil}
-                        color="blue"
-                        onClick={() => {
-                          // aplica máscara antes de abrir para já exibir no input
-                          setEditando({
-                            ...c,
-                            cpf_cnpj: formatCpfCnpj(c.cpf_cnpj || ""),
-                            telefone: formatPhone(c.telefone || ""),
-                          });
-                          setModalOpen(true);
-                        }}
-                        title="Editar"
-                      >
-                        <Pencil size={18} />
-                      </IconButton>
-                      <IconButton
-                        icon={Trash2}
-                        color="red"
-                        onClick={() => handleDelete(c.id)}
-                        title="Excluir"
-                        variant="danger"
-                      >
-                        <Trash2 size={18} />
-                      </IconButton>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {pageSlice.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="p-6 text-center text-gray-500">
-                    Nenhum cliente encontrado.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* paginação */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-2 p-3">
-          {/* info */}
-          <div className="text-xs text-gray-600">
-            Mostrando{" "}
-            <strong>{totalRecords === 0 ? 0 : (page - 1) * pageSize + 1}</strong> –{" "}
-            <strong>{Math.min(page * pageSize, totalRecords)}</strong> de{" "}
-            <strong>{totalRecords}</strong>
-          </div>
-
-          {/* controles */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="px-2 py-1 text-sm rounded border disabled:opacity-50"
-              title="Anterior"
-            >
-              Anterior
-            </button>
-            <div className="text-xs text-gray-700">
-              Página <strong>{page}</strong> de{" "}
-              <strong>{Math.max(1, Math.ceil(totalRecords / Math.max(1, pageSize)))}</strong>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="px-2 py-1 text-sm rounded border disabled:opacity-50"
-              title="Próxima"
-            >
-              Próxima
-            </button>
-          </div>
-
-          {/* page size */}
-          <div className="flex items-center gap-2 text-xs">
-            <label className="text-gray-700">Registros por página</label>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={pageSize}
-              onChange={(e) => {
-                const v = Math.max(1, Number(e.target.value) || 10);
-                setPageSize(v);
-                setPage(1);
-              }}
-              className="w-16 h-8 border rounded px-2 text-sm"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* MODAL DE EDIÇÃO */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Editar Cliente"
-      >
-        {editando && (
-          <div className="grid grid-cols-12 gap-3">
-            <label className="col-span-12 md:col-span-6 text-sm">
-              <span className="mb-1 block font-medium">Nome</span>
+      <div className="page-body space-y-4">
+        {/* Formulário de inclusão */}
+        <form onSubmit={handleSubmit} className="card p-4">
+          <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">
+            Novo cliente
+          </p>
+          <div className="grid grid-cols-12 gap-x-3 gap-y-3">
+            <label className="col-span-12 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Nome *
               <input
                 type="text"
-                value={editando.nome || ""}
-                onChange={(e) =>
-                  setEditando({ ...editando, nome: e.target.value })
-                }
-                className="border rounded p-2 h-10 w-full"
+                value={form.nome}
+                onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                className="w-full"
+                placeholder="Nome do cliente"
+                required
               />
             </label>
-
-            <label className="col-span-12 md:col-span-6 text-sm">
-              <span className="mb-1 block font-medium">CPF/CNPJ</span>
+            <label className="col-span-12 md:col-span-2 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              CPF / CNPJ
               <input
                 type="text"
-                value={editando.cpf_cnpj || ""}
-                onChange={(e) =>
-                  setEditando({
-                    ...editando,
-                    cpf_cnpj: formatCpfCnpj(e.target.value),
-                  })
-                }
-                className="border rounded p-2 h-10 w-full"
-                placeholder="CPF/CNPJ"
+                value={form.cpf_cnpj}
+                onChange={(e) => setForm({ ...form, cpf_cnpj: formatCpfCnpj(e.target.value) })}
+                className="w-full"
+                placeholder="000.000.000-00"
               />
             </label>
-
-            <label className="col-span-12 md:col-span-6 text-sm">
-              <span className="mb-1 block font-medium">Email</span>
+            <label className="col-span-12 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              E-mail
               <input
                 type="email"
-                value={editando.email || ""}
-                onChange={(e) =>
-                  setEditando({ ...editando, email: e.target.value })
-                }
-                className="border rounded p-2 h-10 w-full"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full"
+                placeholder="email@dominio.com"
               />
             </label>
+            <div className="col-span-12 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Telefone
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={form.telefone}
+                  onChange={(e) => setForm({ ...form, telefone: formatPhone(e.target.value) })}
+                  className="w-full"
+                  placeholder="(11) 99999-9999"
+                />
+                <button type="submit" className="btn-primary shrink-0">
+                  <UserPlus size={14} />
+                  Adicionar
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
 
-            <label className="col-span-12 md:col-span-6 text-sm">
-              <span className="mb-1 block font-medium">Telefone</span>
-              <input
-                type="text"
-                value={editando.telefone || ""}
-                onChange={(e) =>
-                  setEditando({
-                    ...editando,
-                    telefone: formatPhone(e.target.value),
-                  })
-                }
-                className="border rounded p-2 h-10 w-full"
-                placeholder="(11) 99999-9999"
-              />
+        {/* Filtro */}
+        <div className="filter-bar">
+          <div className="filter-field">
+            <span className="filter-label">Buscar</span>
+            <input
+              type="text"
+              placeholder="Nome, email ou telefone…"
+              value={termo}
+              onChange={(e) => setTermo(e.target.value)}
+              className="filter-input w-72"
+            />
+          </div>
+        </div>
+
+        {/* Grid */}
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="erp-table">
+              <thead>
+                <tr>
+                  <SortTh field="nome" sortConfig={sortConfig} onSort={handleSort}>Nome</SortTh>
+                  <SortTh field="cpf_cnpj" sortConfig={sortConfig} onSort={handleSort}>CPF / CNPJ</SortTh>
+                  <SortTh field="email" sortConfig={sortConfig} onSort={handleSort}>E-mail</SortTh>
+                  <SortTh field="telefone" sortConfig={sortConfig} onSort={handleSort}>Telefone</SortTh>
+                  <th className="no-sort w-20 text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageSlice.map((c) => (
+                  <tr key={c.id}>
+                    <td className="font-medium">{c.nome || "—"}</td>
+                    <td>{formatCpfCnpj(c.cpf_cnpj || "")}</td>
+                    <td>{c.email || "—"}</td>
+                    <td>{formatPhone(c.telefone || "")}</td>
+                    <td>
+                      <div className="flex items-center justify-center gap-1">
+                        <IconButton
+                          icon={Pencil}
+                          color="blue"
+                          title="Editar"
+                          onClick={() => {
+                            setEditando({
+                              ...c,
+                              cpf_cnpj: formatCpfCnpj(c.cpf_cnpj || ""),
+                              telefone: formatPhone(c.telefone || ""),
+                            });
+                            setModalOpen(true);
+                          }}
+                        />
+                        <IconButton
+                          icon={Trash2}
+                          color="red"
+                          title="Excluir"
+                          onClick={() => handleDelete(c.id)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {pageSlice.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center text-neutral-400 py-8 italic">
+                      Nenhum cliente encontrado.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Paginação */}
+          <div className="pagination-bar">
+            <span>
+              Exibindo{" "}
+              <strong className="text-neutral-700">
+                {totalRecords === 0 ? 0 : (page - 1) * pageSize + 1}
+              </strong>{" "}
+              –{" "}
+              <strong className="text-neutral-700">
+                {Math.min(page * pageSize, totalRecords)}
+              </strong>{" "}
+              / <strong className="text-neutral-700">{totalRecords}</strong> registros
+            </span>
+
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5">
+                Exibir:
+                <select
+                  className="page-size-select"
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                >
+                  {[10, 25, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </span>
+              <div className="flex items-center gap-0.5">
+                <button className="page-btn" onClick={() => goTo(1)} disabled={page === 1}><ChevronsLeft size={13} /></button>
+                <button className="page-btn" onClick={() => goTo(page - 1)} disabled={page === 1}><ChevronLeft size={13} /></button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => Math.abs(p - page) <= 2)
+                  .map((p) => (
+                    <button key={p} onClick={() => goTo(p)} className={p === page ? "page-btn-active" : "page-btn"}>{p}</button>
+                  ))}
+                <button className="page-btn" onClick={() => goTo(page + 1)} disabled={page === totalPages}><ChevronRight size={13} /></button>
+                <button className="page-btn" onClick={() => goTo(totalPages)} disabled={page === totalPages}><ChevronsRight size={13} /></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Modal edição */}
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Editar Cliente">
+        {editando && (
+          <div className="grid grid-cols-12 gap-3">
+            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Nome
+              <input type="text" value={editando.nome || ""} className="w-full"
+                onChange={(e) => setEditando({ ...editando, nome: e.target.value })} />
             </label>
-
-            <div className="col-span-12 flex justify-end">
-              <button
-                onClick={handleSalvarEdicao}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-              >
-                Salvar
-              </button>
+            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              CPF / CNPJ
+              <input type="text" value={editando.cpf_cnpj || ""} placeholder="CPF/CNPJ" className="w-full"
+                onChange={(e) => setEditando({ ...editando, cpf_cnpj: formatCpfCnpj(e.target.value) })} />
+            </label>
+            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              E-mail
+              <input type="email" value={editando.email || ""} className="w-full"
+                onChange={(e) => setEditando({ ...editando, email: e.target.value })} />
+            </label>
+            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Telefone
+              <input type="text" value={editando.telefone || ""} placeholder="(11) 99999-9999" className="w-full"
+                onChange={(e) => setEditando({ ...editando, telefone: formatPhone(e.target.value) })} />
+            </label>
+            <div className="col-span-12 flex justify-end pt-1">
+              <button onClick={handleSalvarEdicao} className="btn-primary">Salvar</button>
             </div>
           </div>
         )}
       </Modal>
-    </div>
+    </>
   );
 }
