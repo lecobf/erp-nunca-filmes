@@ -8,7 +8,7 @@ import { Pencil, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 import IconButton from "../components/IconButton";
 import SortTh from "../components/SortTh";
 import { useSortTable } from "../hooks/useSortTable";
-import CampoEquipamentos from "../components/servicos/CampoEquipamentos";
+import ModalEquipamentos from "../components/servicos/ModalEquipamentos";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 const MESES = [
@@ -72,7 +72,8 @@ export default function Servicos() {
   const [modalOpen, setModalOpen] = useState(false);
   const [servicoEditando, setServicoEditando] = useState(null);
   const [novaDataEdit, setNovaDataEdit] = useState("");
-  const [equipKey, setEquipKey] = useState(0);
+  const [modalEquipOpen, setModalEquipOpen] = useState(false);
+  const [modalEquipEditOpen, setModalEquipEditOpen] = useState(false);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -161,6 +162,33 @@ export default function Servicos() {
     }));
   }
 
+  // ---------- equipamentos ----------
+  function calcTotalEquip(lista) {
+    return (lista || []).reduce((acc, e) => {
+      const v = Number(e.valor_diaria ?? e.valor_aluguel ?? e.valor ?? 0) || 0;
+      const q = Number(e.quantidade ?? e.qtd ?? 1) || 1;
+      return acc + v * q;
+    }, 0);
+  }
+
+  function handleConfirmarEquip(lista) {
+    setFormData((prev) => ({
+      ...prev,
+      equipamentos: lista || [],
+      valor_diaria_equipamentos: prev.is_pacote ? prev.valor_diaria_equipamentos : calcTotalEquip(lista),
+    }));
+    setModalEquipOpen(false);
+  }
+
+  function handleConfirmarEquipEdit(lista) {
+    setServicoEditando((prev) => ({
+      ...prev,
+      equipamentos: lista || [],
+      valor_diaria_equipamentos: prev.is_pacote ? prev.valor_diaria_equipamentos : calcTotalEquip(lista),
+    }));
+    setModalEquipEditOpen(false);
+  }
+
   // ---------- submit ----------
   async function handleSubmit(e) {
     e.preventDefault();
@@ -197,7 +225,6 @@ export default function Servicos() {
       await api.post("/servicos", payload);
       setFormData(emptyForm());
       setNovaData("");
-      setEquipKey((k) => k + 1);
       await carregarServicos();
       if (voltarParaCalendarioSePreciso()) return;
     } catch (err) {
@@ -377,7 +404,7 @@ export default function Servicos() {
               </span>
             </div>
 
-            {/* Linha 3: Cachê (Job) + Equipamentos */}
+            {/* Linha 3: Cachê (Job) + Equipamentos + Pacote */}
             {formData.tipo_servico === "Job" && (
               <label className="col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
                 Valor Diária Cachê
@@ -386,16 +413,35 @@ export default function Servicos() {
               </label>
             )}
 
-            <div className={`${formData.tipo_servico === "Job" ? "col-span-5" : "col-span-8"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
+            <label className={`${formData.tipo_servico === "Job" ? "col-span-4" : "col-span-7"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
               Valor Diária Equipamentos
-              <CampoEquipamentos key={equipKey} showLabel={false}
-                valor={Number(formData.valor_diaria_equipamentos) || 0}
-                pacoteInicial={formData.is_pacote}
-                onValorChange={(val) => setFormData((prev) => prev.valor_diaria_equipamentos === val ? prev : { ...prev, valor_diaria_equipamentos: val })}
-                onSelecionar={(lista) => setFormData((prev) => JSON.stringify(prev.equipamentos) === JSON.stringify(lista) ? prev : { ...prev, equipamentos: lista })}
-                onPacoteChange={(checked) => setFormData((prev) => ({ ...prev, is_pacote: !!checked, valor_diaria_equipamentos: checked ? prev.valor_diaria_equipamentos : 0, equipamentos: checked ? [] : prev.equipamentos }))}
-              />
-            </div>
+              <div className="relative">
+                <CurrencyInput
+                  value={Number(formData.valor_diaria_equipamentos) || 0}
+                  readOnly={!formData.is_pacote}
+                  onChange={(val) => setFormData((prev) => ({ ...prev, valor_diaria_equipamentos: val }))}
+                  className="w-full pr-10"
+                />
+                <button type="button" disabled={formData.is_pacote} onClick={() => setModalEquipOpen(true)}
+                  title="Selecionar equipamentos"
+                  className={`absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded ${formData.is_pacote ? "bg-neutral-300 text-neutral-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}>
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>
+                  </svg>
+                </button>
+              </div>
+            </label>
+
+            <label className="col-span-1 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Pacote
+              <div className="flex items-center border border-neutral-300 rounded px-2 h-[34px]">
+                <input type="checkbox" checked={formData.is_pacote}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData((prev) => ({ ...prev, is_pacote: checked, valor_diaria_equipamentos: checked ? prev.valor_diaria_equipamentos : 0, equipamentos: checked ? [] : prev.equipamentos }));
+                  }} />
+              </div>
+            </label>
 
             {/* Linha 4: Totais + Previsão + Salvar */}
             <label className="col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
@@ -627,16 +673,35 @@ export default function Servicos() {
             )}
 
             {/* Equipamentos */}
-            <div className="col-span-12 md:col-span-5 md:col-start-4 text-sm">
-              <CampoEquipamentos showLabel={true}
-                valor={Number(servicoEditando?.valor_diaria_equipamentos) || 0}
-                equipamentosIniciais={servicoEditando?.is_pacote ? [] : (servicoEditando?.equipamentos || [])}
-                pacoteInicial={!!servicoEditando?.is_pacote}
-                onValorChange={(val) => setServicoEditando((prev) => Number(prev.valor_diaria_equipamentos) === Number(val) ? prev : { ...prev, valor_diaria_equipamentos: val })}
-                onSelecionar={(lista) => setServicoEditando((prev) => JSON.stringify(prev.equipamentos) === JSON.stringify(lista) ? prev : { ...prev, equipamentos: lista })}
-                onPacoteChange={(checked) => setServicoEditando((prev) => ({ ...prev, is_pacote: !!checked, equipamentos: checked ? [] : prev.equipamentos }))}
-              />
-            </div>
+            <label className={`${servicoEditando?.tipo_servico === "Job" ? "col-span-4" : "col-span-7"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
+              Valor Diária Equipamentos
+              <div className="relative">
+                <CurrencyInput
+                  value={Number(servicoEditando?.valor_diaria_equipamentos) || 0}
+                  readOnly={!servicoEditando?.is_pacote}
+                  onChange={(val) => setServicoEditando((prev) => ({ ...prev, valor_diaria_equipamentos: val }))}
+                  className="w-full pr-10"
+                />
+                <button type="button" disabled={servicoEditando?.is_pacote} onClick={() => setModalEquipEditOpen(true)}
+                  title="Selecionar equipamentos"
+                  className={`absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded ${servicoEditando?.is_pacote ? "bg-neutral-300 text-neutral-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}>
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>
+                  </svg>
+                </button>
+              </div>
+            </label>
+
+            <label className="col-span-1 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Pacote
+              <div className="flex items-center border border-neutral-300 rounded px-2 h-[34px]">
+                <input type="checkbox" checked={!!servicoEditando?.is_pacote}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setServicoEditando((prev) => ({ ...prev, is_pacote: checked, valor_diaria_equipamentos: checked ? prev.valor_diaria_equipamentos : 0, equipamentos: checked ? [] : prev.equipamentos }));
+                  }} />
+              </div>
+            </label>
 
             {/* Totais */}
             <label className="col-span-12 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
@@ -672,6 +737,15 @@ export default function Servicos() {
           </div>
         )}
       </Modal>
+
+      {modalEquipOpen && (
+        <ModalEquipamentos isOpen={modalEquipOpen} onClose={() => setModalEquipOpen(false)}
+          onConfirm={handleConfirmarEquip} preSelecionados={formData.equipamentos} />
+      )}
+      {modalEquipEditOpen && (
+        <ModalEquipamentos isOpen={modalEquipEditOpen} onClose={() => setModalEquipEditOpen(false)}
+          onConfirm={handleConfirmarEquipEdit} preSelecionados={servicoEditando?.equipamentos || []} />
+      )}
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { NumericFormat } from "react-number-format";
 import { fmtBRL } from "../utils/formatters";
 
-export default function CurrencyInput({ value, onChange, className = "" }) {
+export default function CurrencyInput({ value, onChange, className = "", readOnly = false, ...rest }) {
   return (
     <NumericFormat
       value={value}
@@ -11,12 +11,13 @@ export default function CurrencyInput({ value, onChange, className = "" }) {
       fixedDecimalScale
       allowNegative={false}
       prefix="R$ "
+      readOnly={readOnly}
       onValueChange={(vals) => {
-        // sempre retorna o valor numérico puro (float) para salvar no backend
-        onChange(Number(vals.floatValue) || 0);
+        if (!readOnly) onChange(Number(vals.floatValue) || 0);
       }}
-      className={`border p-2 rounded ${className}`}
+      className={`border p-2 rounded ${readOnly ? "bg-neutral-50" : ""} ${className}`}
       placeholder="R$ 0,00"
+      {...rest}
     />
   );
 }
