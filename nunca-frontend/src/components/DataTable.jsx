@@ -1,96 +1,96 @@
 import { useState } from "react";
-import { ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
-import IconButton from "./IconButton";
+import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
-export default function DataTable({ columns, data = [], rowsPerPageOptions = [5, 10, 20] }) {
+/**
+ * DataTable — grade profissional com ordenação, paginação e totalizadores.
+ *
+ * Props:
+ *  columns: [{ field, label, noSort?, render? }]
+ *  data: array
+ *  rowsPerPageOptions: number[]  (default [10, 25, 50])
+ *  totals: [{ label, value, className? }]  — linha de totalizadores
+ *  emptyMessage: string
+ */
+export default function DataTable({
+  columns,
+  data = [],
+  rowsPerPageOptions = [10, 25, 50],
+  totals = [],
+  emptyMessage = "Nenhum registro encontrado.",
+}) {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(rowsPerPageOptions[0]);
 
-  // 🔹 Ordenação dinâmica
+  // Ordenação
   const sortedData = [...data].sort((a, b) => {
-    if (!sortConfig.key) return 0;
-    const { key, direction } = sortConfig;
-    const valA = a[key] ?? "";
-    const valB = b[key] ?? "";
-    if (valA < valB) return direction === "asc" ? -1 : 1;
-    if (valA > valB) return direction === "asc" ? 1 : -1;
-    return 0;
+    if (!sortConfig.key || !sortConfig.direction) return 0;
+    const valA = a[sortConfig.key] ?? "";
+    const valB = b[sortConfig.key] ?? "";
+    const cmp = valA < valB ? -1 : valA > valB ? 1 : 0;
+    return sortConfig.direction === "asc" ? cmp : -cmp;
   });
 
-  // 🔹 Paginação
-  const totalPages = Math.ceil(sortedData.length / rowsPerPage);
-  const paginatedData = sortedData.slice(
-    (currentPage - 1) * rowsPerPage,
-    currentPage * rowsPerPage
-  );
+  // Paginação
+  const totalRecords = sortedData.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / rowsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIdx = (safePage - 1) * rowsPerPage;
+  const pageData = sortedData.slice(startIdx, startIdx + rowsPerPage);
 
-  const handleSort = (key) => {
-    if (key === "acoes") return; // não ordena a coluna de ações
+  const goTo = (p) => setCurrentPage(Math.max(1, Math.min(p, totalPages)));
+
+  const handleSort = (field) => {
     setSortConfig((prev) => {
-      if (prev.key === key) {
-        return {
-          key,
-          direction: prev.direction === "asc" ? "desc" : prev.direction === "desc" ? null : "asc",
-        };
-      }
-      return { key, direction: "asc" };
+      if (prev.key !== field) return { key: field, direction: "asc" };
+      if (prev.direction === "asc") return { key: field, direction: "desc" };
+      return { key: null, direction: null };
     });
+    setCurrentPage(1);
   };
 
-  const getSortIcon = (key) => {
-    if (sortConfig.key !== key) return <ArrowUpDown className="inline w-4 h-4 opacity-50" />;
-    if (sortConfig.direction === "asc") return <ArrowUpDown className="inline w-4 h-4 rotate-180" />;
-    if (sortConfig.direction === "desc") return <ArrowUpDown className="inline w-4 h-4" />;
-    return <ArrowUpDown className="inline w-4 h-4 opacity-50" />;
+  const SortIcon = ({ field }) => {
+    if (sortConfig.key !== field) return <ChevronsUpDown size={11} className="opacity-40" />;
+    if (sortConfig.direction === "asc") return <ChevronUp size={11} className="text-white" />;
+    return <ChevronDown size={11} className="text-white" />;
   };
 
   return (
-    <div className="w-full bg-white rounded-lg shadow">
+    <div className="card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="min-w-full border-collapse text-sm">
-          <thead className="bg-neutral-100 border-b">
+        <table className="erp-table">
+          <thead>
             <tr>
               {columns.map((col) => (
                 <th
                   key={col.field}
-                  onClick={() => handleSort(col.field)}
-                  className={`px-3 py-2 text-left font-medium text-neutral-700 select-none cursor-pointer ${
-                    col.field === "acoes" ? "cursor-default" : ""
-                  }`}
+                  className={col.noSort ? "no-sort" : ""}
+                  onClick={() => !col.noSort && handleSort(col.field)}
                 >
-                  <div className="flex items-center gap-1">
+                  <span className="inline-flex items-center gap-1">
                     {col.label}
-                    {col.field !== "acoes" && getSortIcon(col.field)}
-                  </div>
+                    {!col.noSort && <SortIcon field={col.field} />}
+                  </span>
                 </th>
               ))}
             </tr>
           </thead>
 
           <tbody>
-            {paginatedData.length > 0 ? (
-              paginatedData.map((row, rowIndex) => (
-                <tr
-                  key={row.id || rowIndex}
-                  className={`border-t hover:bg-neutral-50 ${
-                    rowIndex % 2 === 0 ? "bg-white" : "bg-neutral-50/40"
-                  }`}
-                >
+            {pageData.length > 0 ? (
+              pageData.map((row, i) => (
+                <tr key={row.id ?? i}>
                   {columns.map((col) => (
-                    <td key={`${rowIndex}-${col.field}`} className="px-3 py-2">
-                      {col.render ? col.render(row) : row[col.field]}
+                    <td key={col.field}>
+                      {col.render ? col.render(row) : (row[col.field] ?? "—")}
                     </td>
                   ))}
                 </tr>
               ))
             ) : (
               <tr>
-                <td
-                  colSpan={columns.length}
-                  className="text-center text-neutral-500 py-4 italic"
-                >
-                  Nenhum registro encontrado
+                <td colSpan={columns.length} className="text-center text-neutral-400 py-8 italic">
+                  {emptyMessage}
                 </td>
               </tr>
             )}
@@ -98,41 +98,73 @@ export default function DataTable({ columns, data = [], rowsPerPageOptions = [5,
         </table>
       </div>
 
-      {/* 🔹 Rodapé com paginação e controle de linhas */}
-      <div className="flex items-center justify-between p-3 text-sm text-neutral-700 bg-neutral-50 border-t">
-        <div className="flex items-center gap-2">
-          <span>Linhas por página:</span>
-          <select
-            className="border rounded px-2 py-1"
-            value={rowsPerPage}
-            onChange={(e) => {
-              setRowsPerPage(Number(e.target.value));
-              setCurrentPage(1);
-            }}
-          >
-            {rowsPerPageOptions.map((opt) => (
-              <option key={opt} value={opt}>
-                {opt}
-              </option>
-            ))}
-          </select>
+      {/* Totalizadores */}
+      {totals.length > 0 && (
+        <div className="totals-bar">
+          {totals.map((t, i) => (
+            <span key={i} className="total-item">
+              <span className="total-label">{t.label}</span>
+              <span className={`total-value ${t.className ?? "text-neutral-800"}`}>{t.value}</span>
+            </span>
+          ))}
         </div>
+      )}
 
-        <div className="flex items-center gap-2">
-          <span>
-            Página {currentPage} de {totalPages || 1}
+      {/* Paginação */}
+      <div className="pagination-bar">
+        <span>
+          Exibindo{" "}
+          <strong className="text-neutral-700">
+            {totalRecords === 0 ? 0 : startIdx + 1}
+          </strong>{" "}
+          –{" "}
+          <strong className="text-neutral-700">
+            {Math.min(startIdx + rowsPerPage, totalRecords)}
+          </strong>{" "}
+          / <strong className="text-neutral-700">{totalRecords}</strong> registros
+        </span>
+
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5">
+            Exibir:
+            <select
+              className="h-6 px-1.5 text-xs border border-neutral-300 rounded bg-white focus:ring-1 focus:ring-primary-400"
+              value={rowsPerPage}
+              onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+            >
+              {rowsPerPageOptions.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
           </span>
-          <div className="flex gap-1">
-            <IconButton
-              icon={ChevronLeft}
-              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-              disabled={currentPage === 1}
-            />
-            <IconButton
-              icon={ChevronRight}
-              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-              disabled={currentPage === totalPages || totalPages === 0}
-            />
+
+          <div className="flex items-center gap-0.5">
+            <button className="page-btn" onClick={() => goTo(1)} disabled={safePage === 1} title="Primeira">
+              <ChevronsLeft size={13} />
+            </button>
+            <button className="page-btn" onClick={() => goTo(safePage - 1)} disabled={safePage === 1} title="Anterior">
+              <ChevronLeft size={13} />
+            </button>
+
+            {/* Páginas próximas */}
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter((p) => Math.abs(p - safePage) <= 2)
+              .map((p) => (
+                <button
+                  key={p}
+                  onClick={() => goTo(p)}
+                  className={p === safePage ? "page-btn-active" : "page-btn"}
+                >
+                  {p}
+                </button>
+              ))}
+
+            <button className="page-btn" onClick={() => goTo(safePage + 1)} disabled={safePage === totalPages} title="Próxima">
+              <ChevronRight size={13} />
+            </button>
+            <button className="page-btn" onClick={() => goTo(totalPages)} disabled={safePage === totalPages} title="Última">
+              <ChevronsRight size={13} />
+            </button>
           </div>
         </div>
       </div>

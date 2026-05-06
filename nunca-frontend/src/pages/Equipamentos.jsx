@@ -4,9 +4,10 @@ import { fmtBRL } from "../utils/formatters";
 import Modal from "../components/Modal";
 import CurrencyInput from "../components/CurrencyInput";
 import IconButton from "../components/IconButton";
-import { Pencil, Trash2 } from "lucide-react";
+import SortTh from "../components/SortTh";
+import { useSortTable } from "../hooks/useSortTable";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 
-/** Opções fixas de categoria */
 const CATEGORIAS = [
   "Câmeras",
   "Lentes",
@@ -20,53 +21,28 @@ const CATEGORIAS = [
   "Baterias",
 ];
 
-/**
- * Equipamentos
- * - Busca por nome (substring) + filtro por categoria
- * - Form: Nome, Categoria (combo fixa), Valor (diária), Quantidade
- * - Grid: Categoria, Nome, Valor (diária), Quantidade, Ações (sem ID)
- * - Modal de edição com os mesmos campos
- * - Paginação client-side (como na tela de Serviços)
- */
 export default function Equipamentos() {
   const [equipamentos, setEquipamentos] = useState([]);
-
-  // busca/filtros
   const [termo, setTermo] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
-
-  // form inclusão
-  const [form, setForm] = useState({
-    nome: "",
-    categoria: "",
-    valor_aluguel: 0,
-    quantidade: 0,
-  });
-
-  // edição
+  const [form, setForm] = useState({ nome: "", categoria: "", valor_aluguel: 0, quantidade: 0 });
   const [editando, setEditando] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
-
-  // paginação
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // ---------- load ----------
   async function carregar() {
     const res = await api.get("/equipamentos");
     setEquipamentos(res.data || []);
   }
 
-  useEffect(() => {
-    carregar();
-  }, []);
+  useEffect(() => { carregar(); }, []);
 
-  // ---------- submit / crud ----------
   async function handleSubmit(e) {
     e.preventDefault();
     await api.post("/equipamentos", {
       nome: form.nome?.trim() || "",
-      categoria: form.categoria || null, // vem da combo fixa
+      categoria: form.categoria || null,
       valor_aluguel: Number(form.valor_aluguel) || 0,
       quantidade: Number(form.quantidade) || 0,
     });
@@ -93,346 +69,205 @@ export default function Equipamentos() {
     await carregar();
   }
 
-  // ---------- filtro (client-side) ----------
   const listaFiltrada = useMemo(() => {
     const t = termo.trim().toLowerCase();
     return (equipamentos || [])
       .filter((e) => {
         const byName = !t || (e.nome || "").toLowerCase().includes(t);
-        const byCat =
-          !filtroCategoria || (e.categoria || "") === filtroCategoria;
+        const byCat = !filtroCategoria || (e.categoria || "") === filtroCategoria;
         return byName && byCat;
       })
       .sort((a, b) => {
-        // ordena por categoria, depois nome
         const ca = (a.categoria || "").localeCompare(b.categoria || "");
-        if (ca !== 0) return ca;
-        return (a.nome || "").localeCompare(b.nome || "");
+        return ca !== 0 ? ca : (a.nome || "").localeCompare(b.nome || "");
       });
   }, [equipamentos, termo, filtroCategoria]);
 
-  // ---------- paginação (client-side) ----------
-  const totalRecords = listaFiltrada.length;
+  const { sorted: listaOrdenada, sortConfig, handleSort } = useSortTable(listaFiltrada);
+
+  const totalRecords = listaOrdenada.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / Math.max(1, pageSize)));
 
-  useEffect(() => {
-    setPage(1);
-  }, [termo, filtroCategoria, pageSize]);
-
-  useEffect(() => {
-    setPage((p) => Math.min(p, totalPages));
-  }, [totalPages]);
+  useEffect(() => { setPage(1); }, [termo, filtroCategoria, pageSize]);
+  useEffect(() => { setPage((p) => Math.min(p, totalPages)); }, [totalPages]);
 
   const pageSlice = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return listaFiltrada.slice(start, start + pageSize);
-  }, [listaFiltrada, page, pageSize]);
+    return listaOrdenada.slice(start, start + pageSize);
+  }, [listaOrdenada, page, pageSize]);
+
+  const goTo = (p) => setPage(Math.max(1, Math.min(p, totalPages)));
 
   return (
-    <div className="p-4">
-      <h2 className="text-2xl font-bold mb-4">Equipamentos</h2>
+    <>
+      <div className="page-header">
+        <h1 className="page-title">Equipamentos</h1>
+      </div>
 
-      {/* FORM DE INCLUSÃO */}
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white p-4 rounded shadow grid grid-cols-12 gap-x-2 gap-y-3 mb-4"
-      >
-        <label className="col-span-12 md:col-span-5 text-sm">
-          <span className="mb-1 block font-medium">Nome</span>
-          <input
-            type="text"
-            value={form.nome}
-            onChange={(e) => setForm({ ...form, nome: e.target.value })}
-            className="border p-2 rounded h-10 w-full"
-            placeholder="Ex: Câmera, Tripé, Luz LED…"
-            required
-          />
-        </label>
-
-        <label className="col-span-12 md:col-span-3 text-sm">
-          <span className="mb-1 block font-medium">Categoria</span>
-          <select
-            value={form.categoria}
-            onChange={(e) => setForm({ ...form, categoria: e.target.value })}
-            className="border p-2 rounded h-10 w-full"
-          >
-            <option value="">Selecione...</option>
-            {CATEGORIAS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="col-span-6 md:col-span-2 text-sm">
-          <span className="mb-1 block font-medium">Valor (diária)</span>
-          <CurrencyInput
-            value={form.valor_aluguel}
-            onChange={(v) => setForm({ ...form, valor_aluguel: v })}
-            className="h-10 w-full"
-          />
-        </label>
-
-        <div className="col-span-6 md:col-span-2 text-sm">
-          <span className="mb-1 block font-medium">Quantidade</span>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              min={0}
-              step={1}
-              value={form.quantidade}
-              onChange={(e) =>
-                setForm({ ...form, quantidade: Number(e.target.value) || 0 })
-              }
-              className="border p-2 rounded h-10 w-full"
-              placeholder="0"
-            />
-            <button
-              type="submit"
-              className="bg-blue-600 text-white px-3 py-2 rounded text-sm shrink-0"
-            >
-              Adicionar
-            </button>
-          </div>
-        </div>
-      </form>
-
-      {/* BUSCA + FILTRO CATEGORIA */}
-      <div className="bg-white p-4 rounded shadow mb-3">
-        <div className="grid grid-cols-12 gap-2 items-end">
-          <div className="col-span-12 md:col-span-6">
-            <label className="block text-sm">
-              <span className="mb-1 block text-gray-700">Buscar por nome</span>
-              <input
-                type="text"
-                placeholder="Buscar por nome do equipamento…"
-                value={termo}
-                onChange={(e) => setTermo(e.target.value)}
-                className="border p-2 rounded h-10 w-full"
-              />
+      <div className="page-body space-y-4">
+        {/* Formulário */}
+        <form onSubmit={handleSubmit} className="card p-4">
+          <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">
+            Novo equipamento
+          </p>
+          <div className="grid grid-cols-12 gap-x-3 gap-y-3">
+            <label className="col-span-12 md:col-span-5 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Nome *
+              <input type="text" value={form.nome} placeholder="Ex: Câmera Sony FX3…" required className="w-full"
+                onChange={(e) => setForm({ ...form, nome: e.target.value })} />
             </label>
-          </div>
-
-          <div className="col-span-12 md:col-span-4">
-            <label className="block text-sm">
-              <span className="mb-1 block text-gray-700">Categoria</span>
-              <select
-                value={filtroCategoria}
-                onChange={(e) => setFiltroCategoria(e.target.value)}
-                className="border p-2 rounded h-10 w-full"
-              >
-                <option value="">Todas</option>
-                {CATEGORIAS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
+            <label className="col-span-12 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Categoria
+              <select value={form.categoria} className="w-full"
+                onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
+                <option value="">Selecione…</option>
+                {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
+            <label className="col-span-6 md:col-span-2 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Valor (diária)
+              <CurrencyInput value={form.valor_aluguel} className="w-full"
+                onChange={(v) => setForm({ ...form, valor_aluguel: v })} />
+            </label>
+            <div className="col-span-6 md:col-span-2 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Quantidade
+              <div className="flex gap-2">
+                <input type="number" min={0} step={1} value={form.quantidade} placeholder="0" className="w-full"
+                  onChange={(e) => setForm({ ...form, quantidade: Number(e.target.value) || 0 })} />
+                <button type="submit" className="btn-primary shrink-0">
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
           </div>
+        </form>
 
-          <div className="col-span-12 md:col-span-2 flex md:justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                setTermo("");
-                setFiltroCategoria("");
-                setPage(1);
-              }}
-              className="border px-3 py-2 rounded text-sm"
-              title="Limpar filtros"
-            >
+        {/* Filtros */}
+        <div className="filter-bar">
+          <div className="filter-field">
+            <span className="filter-label">Buscar</span>
+            <input type="text" placeholder="Nome do equipamento…" value={termo} className="filter-input w-52"
+              onChange={(e) => setTermo(e.target.value)} />
+          </div>
+          <div className="filter-field">
+            <span className="filter-label">Categoria</span>
+            <select className="filter-select w-48" value={filtroCategoria}
+              onChange={(e) => setFiltroCategoria(e.target.value)}>
+              <option value="">Todas</option>
+              {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="filter-actions">
+            <button type="button" className="btn-secondary"
+              onClick={() => { setTermo(""); setFiltroCategoria(""); setPage(1); }}>
               Limpar
             </button>
           </div>
         </div>
-      </div>
 
-      {/* TABELA */}
-      <div className="bg-white rounded shadow">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                {/* sem ID */}
-                <th className="p-2 text-left">Categoria</th>
-                <th className="p-2 text-left">Nome</th>
-                <th className="p-2 text-right">Valor (diária)</th>
-                <th className="p-2 text-right">Quantidade</th>
-                <th className="p-2 text-center w-24">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageSlice.map((e) => (
-                <tr key={e.id} className="border-t hover:bg-gray-50">
-                  <td className="p-2">{e.categoria || "-"}</td>
-                  <td className="p-2">{e.nome}</td>
-                  <td className="p-2 text-right">{fmtBRL(Number(e.valor_aluguel) || 0)}</td>
-                  <td className="p-2 text-right">{Number(e.quantidade) || 0}</td>
-                  <td className="p-2">
-                    <div className="flex items-center justify-center gap-2">
-                      <IconButton
-                        icon={Pencil}
-                        color="blue"
-                        onClick={() => {
-                          setEditando({
-                            ...e,
-                            valor_aluguel: Number(e.valor_aluguel) || 0,
-                            quantidade: Number(e.quantidade) || 0,
-                          });
-                          setModalOpen(true);
-                        }}
-                        title="Editar"
-                      >
-                        <Pencil size={18} />
-                      </IconButton>
-                      <IconButton
-                        icon={Trash2}
-                        color="red"
-                        onClick={() => handleDelete(e.id)}
-                        title="Excluir"
-                        variant="danger"
-                      >
-                        <Trash2 size={18} />
-                      </IconButton>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {pageSlice.length === 0 && (
+        {/* Grid */}
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="erp-table">
+              <thead>
                 <tr>
-                  <td colSpan={5} className="p-6 text-center text-gray-500">
-                    Nenhum equipamento encontrado.
-                  </td>
+                  <SortTh field="categoria" sortConfig={sortConfig} onSort={handleSort}>Categoria</SortTh>
+                  <SortTh field="nome" sortConfig={sortConfig} onSort={handleSort}>Nome</SortTh>
+                  <SortTh field="valor_aluguel" sortConfig={sortConfig} onSort={handleSort} className="text-right">Valor Diária</SortTh>
+                  <SortTh field="quantidade" sortConfig={sortConfig} onSort={handleSort} className="text-right">Quantidade</SortTh>
+                  <th className="no-sort text-center w-20">Ações</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* paginação */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-2 p-3">
-          {/* info */}
-          <div className="text-xs text-gray-600">
-            Mostrando{" "}
-            <strong>{totalRecords === 0 ? 0 : (page - 1) * pageSize + 1}</strong> –{" "}
-            <strong>{Math.min(page * pageSize, totalRecords)}</strong> de{" "}
-            <strong>{totalRecords}</strong>
+              </thead>
+              <tbody>
+                {pageSlice.map((e) => (
+                  <tr key={e.id}>
+                    <td className="text-neutral-500">{e.categoria || "—"}</td>
+                    <td className="font-medium">{e.nome}</td>
+                    <td className="text-right">{fmtBRL(Number(e.valor_aluguel) || 0)}</td>
+                    <td className="text-right">{Number(e.quantidade) || 0}</td>
+                    <td>
+                      <div className="flex items-center justify-center gap-1">
+                        <IconButton icon={Pencil} color="blue" title="Editar"
+                          onClick={() => { setEditando({ ...e, valor_aluguel: Number(e.valor_aluguel) || 0, quantidade: Number(e.quantidade) || 0 }); setModalOpen(true); }} />
+                        <IconButton icon={Trash2} color="red" title="Excluir"
+                          onClick={() => handleDelete(e.id)} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {pageSlice.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center text-neutral-400 py-8 italic">
+                      Nenhum equipamento encontrado.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
-          {/* controles */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="px-2 py-1 text-sm rounded border disabled:opacity-50"
-              title="Anterior"
-            >
-              Anterior
-            </button>
-            <div className="text-xs text-gray-700">
-              Página <strong>{page}</strong> de <strong>{totalPages}</strong>
+          {/* Paginação */}
+          <div className="pagination-bar">
+            <span>
+              Exibindo <strong className="text-neutral-700">{totalRecords === 0 ? 0 : (page - 1) * pageSize + 1}</strong>{" "}
+              – <strong className="text-neutral-700">{Math.min(page * pageSize, totalRecords)}</strong>{" "}
+              / <strong className="text-neutral-700">{totalRecords}</strong> registros
+            </span>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5">
+                Exibir:
+                <select className="page-size-select"
+                  value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}>
+                  {[10, 25, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </span>
+              <div className="flex items-center gap-0.5">
+                <button className="page-btn" onClick={() => goTo(1)} disabled={page === 1}><ChevronsLeft size={13} /></button>
+                <button className="page-btn" onClick={() => goTo(page - 1)} disabled={page === 1}><ChevronLeft size={13} /></button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => Math.abs(p - page) <= 2).map((p) => (
+                  <button key={p} onClick={() => goTo(p)} className={p === page ? "page-btn-active" : "page-btn"}>{p}</button>
+                ))}
+                <button className="page-btn" onClick={() => goTo(page + 1)} disabled={page === totalPages}><ChevronRight size={13} /></button>
+                <button className="page-btn" onClick={() => goTo(totalPages)} disabled={page === totalPages}><ChevronsRight size={13} /></button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className="px-2 py-1 text-sm rounded border disabled:opacity-50"
-              title="Próxima"
-            >
-              Próxima
-            </button>
-          </div>
-
-          {/* page size */}
-          <div className="flex items-center gap-2 text-xs">
-            <label className="text-gray-700">Registros por página</label>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={pageSize}
-              onChange={(e) => {
-                const v = Math.max(1, Number(e.target.value) || 10);
-                setPageSize(v);
-                setPage(1);
-              }}
-              className="w-16 h-8 border rounded px-2 text-sm"
-            />
           </div>
         </div>
       </div>
 
-      {/* MODAL EDIÇÃO */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title="Editar Equipamento"
-      >
+      {/* Modal edição */}
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Editar Equipamento">
         {editando && (
           <div className="grid grid-cols-12 gap-3">
-            <label className="col-span-12 md:col-span-6 text-sm">
-              <span className="mb-1 block font-medium">Nome</span>
-              <input
-                type="text"
-                value={editando.nome || ""}
-                onChange={(e) => setEditando({ ...editando, nome: e.target.value })}
-                className="border p-2 rounded h-10 w-full"
-              />
+            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Nome
+              <input type="text" value={editando.nome || ""} className="w-full"
+                onChange={(e) => setEditando({ ...editando, nome: e.target.value })} />
             </label>
-
-            <label className="col-span-12 md:col-span-6 text-sm">
-              <span className="mb-1 block font-medium">Categoria</span>
-              <select
-                value={editando.categoria || ""}
-                onChange={(e) => setEditando({ ...editando, categoria: e.target.value })}
-                className="border p-2 rounded h-10 w-full"
-              >
-                <option value="">Selecione...</option>
-                {CATEGORIAS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
+            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Categoria
+              <select value={editando.categoria || ""} className="w-full"
+                onChange={(e) => setEditando({ ...editando, categoria: e.target.value })}>
+                <option value="">Selecione…</option>
+                {CATEGORIAS.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
-
-            <label className="col-span-12 md:col-span-6 text-sm">
-              <span className="mb-1 block font-medium">Valor (diária)</span>
-              <CurrencyInput
-                value={editando.valor_aluguel || 0}
-                onChange={(v) => setEditando({ ...editando, valor_aluguel: v })}
-                className="h-10 w-full"
-              />
+            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Valor (diária)
+              <CurrencyInput value={editando.valor_aluguel || 0} className="w-full"
+                onChange={(v) => setEditando({ ...editando, valor_aluguel: v })} />
             </label>
-
-            <label className="col-span-12 md:col-span-6 text-sm">
-              <span className="mb-1 block font-medium">Quantidade</span>
-              <input
-                type="number"
-                min={0}
-                step={1}
-                value={editando.quantidade ?? 0}
-                onChange={(e) =>
-                  setEditando({ ...editando, quantidade: Number(e.target.value) || 0 })
-                }
-                className="border p-2 rounded h-10 w-full"
-              />
+            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Quantidade
+              <input type="number" min={0} step={1} value={editando.quantidade ?? 0} className="w-full"
+                onChange={(e) => setEditando({ ...editando, quantidade: Number(e.target.value) || 0 })} />
             </label>
-
             <div className="col-span-12 flex justify-end">
-              <button
-                onClick={handleSalvarEdicao}
-                className="bg-blue-600 text-white px-4 py-2 rounded"
-              >
-                Salvar
-              </button>
+              <button onClick={handleSalvarEdicao} className="btn-primary">Salvar</button>
             </div>
           </div>
         )}
       </Modal>
-    </div>
+    </>
   );
 }

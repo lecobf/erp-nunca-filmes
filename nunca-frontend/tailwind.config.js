@@ -5,7 +5,7 @@ export default {
     "./src/**/*.{js,jsx,ts,tsx}",
   ],
 
-  darkMode: "class", // 🌙 Habilita modo escuro via classe .dark
+  darkMode: "class",
 
   theme: {
     extend: {
@@ -34,6 +34,14 @@ export default {
           800: "#262626",
           900: "#171717",
         },
+        sidebar: {
+          bg:      "#18181b",
+          hover:   "#27272a",
+          active:  "#3f3f46",
+          border:  "#3f3f46",
+          text:    "#a1a1aa",
+          active_text: "#ffffff",
+        },
       },
 
       fontFamily: {
@@ -41,17 +49,22 @@ export default {
       },
 
       boxShadow: {
-        soft: "0 1px 3px rgba(0,0,0,0.08)",
+        soft:  "0 1px 3px rgba(0,0,0,0.08)",
+        card:  "0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04)",
+      },
+
+      fontSize: {
+        "2xs": ["0.625rem", { lineHeight: "0.875rem" }],
       },
 
       transitionDuration: {
-        DEFAULT: "200ms",
+        DEFAULT: "150ms",
       },
     },
   },
 
   plugins: [
-    require("@tailwindcss/forms"),       // 🧩 Melhora inputs e selects
-    require("@tailwindcss/typography"),  // 📰 Estilo de textos longos
+    require("@tailwindcss/forms"),
+    require("@tailwindcss/typography"),
   ],
 };

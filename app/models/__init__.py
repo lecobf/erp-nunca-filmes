@@ -9,5 +9,6 @@ from .cliente import Cliente
 from .equipamento import Equipamento
 from .servico_equipamento import ServicoEquipamento
 from .servico import Servico
+from .servico_data import ServicoDatas
 from .pagamento import Pagamento
 from .custo import Custo
