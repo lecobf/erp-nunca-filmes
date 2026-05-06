@@ -28,7 +28,8 @@ export default function Login() {
       const data = await res.json();
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("usuario_id", String(data.usuario_id));
-      localStorage.setItem("usuario_nome", data.nome);
+      localStorage.setItem("nome", data.nome);
+      localStorage.setItem("email", data.email);
       window.location.href = "/";
     } catch {
       setErro("Não foi possível conectar ao servidor. Tente novamente.");

@@ -26,6 +26,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     usuario_id: int
     nome: str
+    email: str
 
 
 class UsuarioUpdate(BaseModel):

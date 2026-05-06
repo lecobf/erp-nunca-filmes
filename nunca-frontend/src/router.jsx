@@ -7,13 +7,22 @@ import Custos from "./pages/Custos";
 import Pagamentos from "./pages/Pagamentos";
 import Equipamentos from "./pages/Equipamentos";
 import Calendario from "./pages/Calendario";
+import Usuarios from "./pages/Usuarios";
 import Login from "./pages/Login";
+
+const ADMIN_EMAIL = "admin@nuncafilmes.com";
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!token) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function AdminRoute({ children }) {
+  const token = localStorage.getItem("token");
+  const email = localStorage.getItem("email");
+  if (!token) return <Navigate to="/login" replace />;
+  if (email !== ADMIN_EMAIL) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -37,6 +46,14 @@ export const router = createBrowserRouter([
       { path: "pagamentos", element: <Pagamentos /> },
       { path: "equipamentos", element: <Equipamentos /> },
       { path: "calendario", element: <Calendario /> },
+      {
+        path: "usuarios",
+        element: (
+          <AdminRoute>
+            <Usuarios />
+          </AdminRoute>
+        ),
+      },
     ],
   },
 ]);

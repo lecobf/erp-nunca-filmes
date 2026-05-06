@@ -3,10 +3,12 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "./api/config";
 import {
   LayoutDashboard, Briefcase, Users, DollarSign,
-  TrendingDown, Camera, Calendar, Settings, LogOut, X,
+  TrendingDown, Camera, Calendar, Settings, LogOut, X, ShieldCheck,
 } from "lucide-react";
 
-const NAV_ITEMS = [
+const ADMIN_EMAIL = "admin@nuncafilmes.com";
+
+const BASE_NAV_ITEMS = [
   { to: "/",             label: "Dashboard",    icon: LayoutDashboard },
   { to: "/servicos",     label: "Serviços",     icon: Briefcase },
   { to: "/clientes",     label: "Clientes",     icon: Users },
@@ -15,6 +17,8 @@ const NAV_ITEMS = [
   { to: "/equipamentos", label: "Equipamentos", icon: Camera },
   { to: "/calendario",   label: "Calendário",   icon: Calendar },
 ];
+
+const ADMIN_NAV_ITEM = { to: "/usuarios", label: "Usuários", icon: ShieldCheck };
 
 function SidebarLink({ to, label, icon: Icon }) {
   return (
@@ -218,10 +222,14 @@ export default function App() {
     () => localStorage.getItem("nome") || "Usuário"
   );
 
+  const isAdmin = localStorage.getItem("email") === ADMIN_EMAIL;
+  const NAV_ITEMS = isAdmin ? [...BASE_NAV_ITEMS, ADMIN_NAV_ITEM] : BASE_NAV_ITEMS;
+
   function handleLogout() {
     localStorage.removeItem("token");
     localStorage.removeItem("nome");
     localStorage.removeItem("usuario_id");
+    localStorage.removeItem("email");
     navigate("/login");
   }
 
