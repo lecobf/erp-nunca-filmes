@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 from ..utils.deps import get_db
 from ..utils.filtros import aplicar_filtros_data
@@ -12,6 +12,41 @@ from ..schemas.pagamento import PagamentoCreate, PagamentoOut
 from ..core.security import get_current_user_id
 
 router = APIRouter(prefix="/pagamentos", tags=["pagamentos"])
+
+# 🔹 RESUMO A RECEBER (card informativo)
+@router.get("/resumo-receber")
+def resumo_a_receber(
+    cliente_id: Optional[int] = Query(None),
+    data_inicio: Optional[str] = Query(None),
+    data_fim: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    query = db.query(Servico).filter(
+        Servico.usuario_id == current_user_id,
+        Servico.status != "pago",
+    )
+
+    if cliente_id:
+        query = query.filter(Servico.cliente_id == cliente_id)
+
+    if data_inicio:
+        query = query.filter(Servico.data_previsao_pagamento >= date.fromisoformat(data_inicio))
+    if data_fim:
+        query = query.filter(Servico.data_previsao_pagamento <= date.fromisoformat(data_fim))
+
+    servicos = query.all()
+
+    total = sum(s.valor_pendente_atual or 0.0 for s in servicos)
+    count_pendentes = sum(1 for s in servicos if s.status == "pendente")
+    count_parciais  = sum(1 for s in servicos if s.status == "parcial")
+
+    return {
+        "total_a_receber": total,
+        "count_pendentes": count_pendentes,
+        "count_parciais": count_parciais,
+    }
+
 
 # 🔹 LISTAR PAGAMENTOS
 @router.get("")

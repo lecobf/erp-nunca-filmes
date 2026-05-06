@@ -26,6 +26,8 @@ export default function Pagamentos() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  const [resumoReceber, setResumoReceber] = useState(null);
+
   async function carregarClientesComPagamentos() {
     const res = await api.get("/clientes/com-pagamentos");
     setClientesComPagamentos(res.data || []);
@@ -38,6 +40,15 @@ export default function Pagamentos() {
     if (filtroDataFim) params.data_fim = filtroDataFim;
     const res = await api.get("/pagamentos", { params });
     setPagamentos(res.data || []);
+  }
+
+  async function carregarResumoReceber() {
+    const params = {};
+    if (filtroClienteId) params.cliente_id = filtroClienteId;
+    if (filtroDataIni) params.data_inicio = filtroDataIni;
+    if (filtroDataFim) params.data_fim = filtroDataFim;
+    const res = await api.get("/pagamentos/resumo-receber", { params });
+    setResumoReceber(res.data || null);
   }
 
   async function carregarServicosComboFiltro() {
@@ -54,9 +65,14 @@ export default function Pagamentos() {
     carregarServicosComboFiltro();
     carregarServicosComboForm();
     carregarClientesComPagamentos();
+    carregarResumoReceber();
   }, []);
 
-  useEffect(() => { carregarPagamentos(); setPage(1); }, [filtroClienteId, filtroDataIni, filtroDataFim]);
+  useEffect(() => {
+    carregarPagamentos();
+    carregarResumoReceber();
+    setPage(1);
+  }, [filtroClienteId, filtroDataIni, filtroDataFim]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -165,6 +181,38 @@ export default function Pagamentos() {
             </div>
           </div>
         </form>
+
+        {/* Card — Total a Receber */}
+        {resumoReceber && (
+          <div className="flex items-stretch gap-3">
+            <div className="flex-1 bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
+              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-1">
+                Total a Receber
+                {(filtroClienteId || filtroDataIni || filtroDataFim) && (
+                  <span className="ml-1 font-normal normal-case text-amber-500">(filtrado)</span>
+                )}
+              </p>
+              <p className="text-2xl font-bold text-amber-700 leading-none">
+                {fmtBRL(resumoReceber.total_a_receber)}
+              </p>
+              <div className="flex gap-4 mt-2">
+                {resumoReceber.count_pendentes > 0 && (
+                  <span className="text-xs text-amber-600">
+                    <span className="font-semibold">{resumoReceber.count_pendentes}</span> sem nenhum pagamento
+                  </span>
+                )}
+                {resumoReceber.count_parciais > 0 && (
+                  <span className="text-xs text-amber-600">
+                    <span className="font-semibold">{resumoReceber.count_parciais}</span> parcialmente pagos
+                  </span>
+                )}
+                {resumoReceber.count_pendentes === 0 && resumoReceber.count_parciais === 0 && (
+                  <span className="text-xs text-emerald-600 font-medium">✓ Tudo quitado</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Filtros */}
         <div className="filter-bar">
