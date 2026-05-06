@@ -39,7 +39,8 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <Dashboard /> },
+      { index: true, element: <Calendario /> },
+      { path: "dashboard", element: <Dashboard /> },
       { path: "servicos", element: <Servicos /> },
       { path: "clientes", element: <Clientes /> },
       { path: "custos", element: <Custos /> },

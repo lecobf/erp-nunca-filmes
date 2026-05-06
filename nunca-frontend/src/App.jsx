@@ -9,13 +9,13 @@ import {
 const ADMIN_EMAIL = "admin@nuncafilmes.com";
 
 const BASE_NAV_ITEMS = [
-  { to: "/",             label: "Dashboard",    icon: LayoutDashboard },
+  { to: "/",             label: "Calendário",   icon: Calendar },
   { to: "/servicos",     label: "Serviços",     icon: Briefcase },
   { to: "/clientes",     label: "Clientes",     icon: Users },
   { to: "/custos",       label: "Custos",       icon: TrendingDown },
   { to: "/pagamentos",   label: "Pagamentos",   icon: DollarSign },
   { to: "/equipamentos", label: "Equipamentos", icon: Camera },
-  { to: "/calendario",   label: "Calendário",   icon: Calendar },
+  { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
 ];
 
 const ADMIN_NAV_ITEM = { to: "/usuarios", label: "Usuários", icon: ShieldCheck };
@@ -41,13 +41,13 @@ function SidebarLink({ to, label, icon: Icon }) {
 
 function BottomNavLink({ to, label, icon: Icon }) {
   const shortLabel = {
-    Dashboard: "Home",
+    Calendário: "Agenda",
     Serviços: "Serviços",
     Clientes: "Clientes",
     Custos: "Custos",
     Pagamentos: "Pgtos",
     Equipamentos: "Equip.",
-    Calendário: "Agenda",
+    Dashboard: "Dashboard",
   }[label] ?? label;
 
   return (
