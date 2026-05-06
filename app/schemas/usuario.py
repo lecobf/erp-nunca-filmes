@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -25,3 +26,9 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     usuario_id: int
     nome: str
+
+
+class UsuarioUpdate(BaseModel):
+    nome: Optional[str] = None
+    senha_atual: Optional[str] = None
+    senha_nova: Optional[str] = None
