@@ -103,8 +103,21 @@ export default function Pagamentos() {
 
   const goTo = (p) => setPage(Math.max(1, Math.min(p, totalPages)));
 
-  const totalPago    = pagamentos.reduce((s, p) => s + (p.valor_pago || 0), 0);
-  const totalPendente = pagamentos.reduce((s, p) => s + (p.valor_pendente || 0), 0);
+  const totalPago = pagamentos.reduce((s, p) => s + (p.valor_pago || 0), 0);
+
+  // Para cada serviço, considera apenas o registro mais recente (maior id).
+  // Evita somar snapshots históricos de "a receber" do mesmo serviço.
+  const totalPendente = useMemo(() => {
+    const latestPorServico = new Map();
+    for (const p of pagamentos) {
+      const atual = latestPorServico.get(p.servico_id);
+      if (!atual || p.id > atual.id) {
+        latestPorServico.set(p.servico_id, p);
+      }
+    }
+    return Array.from(latestPorServico.values())
+      .reduce((s, p) => s + (p.valor_pendente > 0 ? p.valor_pendente : 0), 0);
+  }, [pagamentos]);
 
   return (
     <>
