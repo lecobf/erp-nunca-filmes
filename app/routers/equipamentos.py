@@ -4,25 +4,37 @@ from typing import List, Optional
 from ..utils.deps import get_db
 from ..models.equipamento import Equipamento
 from ..schemas.equipamento import EquipamentoCreate, EquipamentoUpdate, EquipamentoOut
+from ..core.security import get_current_user_id
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/equipamentos", tags=["equipamentos"])
 
 @router.get("", response_model=list[EquipamentoOut])
-def listar_equipamentos(db: Session = Depends(get_db)):
-    return db.query(Equipamento).all()
+def listar_equipamentos(
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    return db.query(Equipamento).filter(Equipamento.usuario_id == current_user_id).all()
 
 @router.post("", response_model=EquipamentoOut)
-def criar_equipamento(equipamento: EquipamentoCreate, db: Session = Depends(get_db)):
-    db_equipamento = Equipamento(**equipamento.dict())
+def criar_equipamento(
+    equipamento: EquipamentoCreate,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    db_equipamento = Equipamento(**equipamento.dict(), usuario_id=current_user_id)
     db.add(db_equipamento)
     db.commit()
     db.refresh(db_equipamento)
     return db_equipamento
 
 @router.delete("/{equipamento_id}")
-def deletar_equipamento(equipamento_id: int, db: Session = Depends(get_db)):
-    equipamento = db.query(Equipamento).filter(Equipamento.id == equipamento_id).first()
+def deletar_equipamento(
+    equipamento_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    equipamento = db.query(Equipamento).filter(Equipamento.id == equipamento_id, Equipamento.usuario_id == current_user_id).first()
     if not equipamento:
         raise HTTPException(status_code=404, detail="Equipamento não encontrado")
     db.delete(equipamento)
@@ -30,8 +42,13 @@ def deletar_equipamento(equipamento_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 @router.put("/{equipamento_id}", response_model=EquipamentoOut)
-def atualizar_equipamento(equipamento_id: int, equipamento: EquipamentoUpdate, db: Session = Depends(get_db)):
-    db_equipamento = db.query(Equipamento).filter(Equipamento.id == equipamento_id).first()
+def atualizar_equipamento(
+    equipamento_id: int,
+    equipamento: EquipamentoUpdate,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    db_equipamento = db.query(Equipamento).filter(Equipamento.id == equipamento_id, Equipamento.usuario_id == current_user_id).first()
     if not db_equipamento:
         raise HTTPException(status_code=404, detail="Equipamento não encontrado")
 
@@ -51,7 +68,11 @@ class EquipamentoImport(BaseModel):
 
 
 @router.post("/importar")
-def importar_equipamentos(dados: List[EquipamentoImport], db: Session = Depends(get_db)):
+def importar_equipamentos(
+    dados: List[EquipamentoImport],
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
     novos = []
     for item in dados:
         eq = Equipamento(
@@ -59,6 +80,7 @@ def importar_equipamentos(dados: List[EquipamentoImport], db: Session = Depends(
             categoria=item.categoria,
             valor_aluguel=item.valor_aluguel or 0.0,
             quantidade=item.quantidade or 0,
+            usuario_id=current_user_id,
         )
         db.add(eq)
         novos.append(eq)

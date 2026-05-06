@@ -8,11 +8,15 @@ from ..models.custo import Custo
 from ..models.servico import Servico
 from ..models.cliente import Cliente
 from ..schemas.custo import CustoBase
+from ..core.security import get_current_user_id
 
 router = APIRouter(prefix="/custos", tags=["custos"])
 
 @router.get("")
-def listar_custos(db: Session = Depends(get_db)):
+def listar_custos(
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
     custos = (
         db.query(
             Custo.id,
@@ -25,25 +29,35 @@ def listar_custos(db: Session = Depends(get_db)):
         )
         .join(Servico, Custo.servico_id == Servico.id)
         .join(Cliente, Servico.cliente_id == Cliente.id)
+        .filter(Custo.usuario_id == current_user_id)
         .order_by(Custo.data.desc())
         .all()
     )
     return [c._asdict() for c in custos]
 
 @router.post("")
-def criar_custo(custo: CustoBase, db: Session = Depends(get_db)):
+def criar_custo(
+    custo: CustoBase,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
     servico = db.query(Servico).filter(Servico.id == custo.servico_id).first()
     if not servico:
         raise HTTPException(status_code=404, detail="Serviço não encontrado")
-    db_custo = Custo(**custo.dict())
+    db_custo = Custo(**custo.dict(), usuario_id=current_user_id)
     db.add(db_custo)
     db.commit()
     db.refresh(db_custo)
     return db_custo
 
 @router.put("/{custo_id}")
-def atualizar_custo(custo_id: int, custo: CustoBase, db: Session = Depends(get_db)):
-    db_custo = db.query(Custo).filter(Custo.id == custo_id).first()
+def atualizar_custo(
+    custo_id: int,
+    custo: CustoBase,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    db_custo = db.query(Custo).filter(Custo.id == custo_id, Custo.usuario_id == current_user_id).first()
     if not db_custo:
         raise HTTPException(status_code=404, detail="Custo não encontrado")
     servico = db.query(Servico).filter(Servico.id == custo.servico_id).first()
@@ -58,8 +72,12 @@ def atualizar_custo(custo_id: int, custo: CustoBase, db: Session = Depends(get_d
     return db_custo
 
 @router.delete("/{custo_id}")
-def deletar_custo(custo_id: int, db: Session = Depends(get_db)):
-    db_custo = db.query(Custo).filter(Custo.id == custo_id).first()
+def deletar_custo(
+    custo_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    db_custo = db.query(Custo).filter(Custo.id == custo_id, Custo.usuario_id == current_user_id).first()
     if not db_custo:
         raise HTTPException(status_code=404, detail="Custo não encontrado")
     db.delete(db_custo)
@@ -73,8 +91,9 @@ def listar_custos_periodo(
     mes: Optional[int] = Query(None),
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
+    current_user_id: int = Depends(get_current_user_id),
 ):
-    query = db.query(Custo)
+    query = db.query(Custo).filter(Custo.usuario_id == current_user_id)
     query = aplicar_filtros_data(query, Custo.data, ano, mes, data_inicio, data_fim)
     custos = query.order_by(Custo.data.desc()).all()
     resposta = []

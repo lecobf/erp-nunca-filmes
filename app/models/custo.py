@@ -10,5 +10,6 @@ class Custo(Base):
     descricao = Column(String, nullable=False)
     valor = Column(Float, nullable=False)
     data = Column(Date, default=datetime.date.today)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
     servico = relationship("Servico", back_populates="custos")

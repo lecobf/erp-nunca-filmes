@@ -11,5 +11,6 @@ class Pagamento(Base):
     valor_pago = Column(Float, nullable=False)
     data_pagamento = Column(Date, default=date.today)
     valor_pendente = Column(Float, default=0)  # histórico no momento do pagamento
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
     servico = relationship("Servico", back_populates="pagamentos")

@@ -34,6 +34,13 @@ api.interceptors.request.use(
     console.log(`➡️  [${config.method?.toUpperCase()}] ${config.url}`);
     // 🆕 Exibe loading opcional global
     document.body.style.cursor = "wait";
+
+    // Injeta token JWT se disponível
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers["Authorization"] = `Bearer ${token}`;
+    }
+
     return config;
   },
   (error) => {
@@ -54,6 +61,15 @@ api.interceptors.response.use(
   },
   (error) => {
     document.body.style.cursor = "default"; // 🆕 sempre reseta o cursor
+
+    // Token inválido/expirado → redireciona para login
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("usuario_id");
+      localStorage.removeItem("usuario_nome");
+      window.location.href = "/login";
+      return Promise.reject(error);
+    }
 
     if (error.code === "ECONNABORTED") {
       console.error("⏱️ Tempo limite atingido ao tentar se conectar ao servidor.");

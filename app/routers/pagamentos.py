@@ -9,6 +9,7 @@ from ..models.pagamento import Pagamento
 from ..models.servico import Servico
 from ..models.cliente import Cliente
 from ..schemas.pagamento import PagamentoCreate, PagamentoOut
+from ..core.security import get_current_user_id
 
 router = APIRouter(prefix="/pagamentos", tags=["pagamentos"])
 
@@ -22,8 +23,9 @@ def listar_pagamentos(
     data_inicio: Optional[str] = Query(None),
     data_fim: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
 ):
-    query = db.query(Pagamento)
+    query = db.query(Pagamento).filter(Pagamento.usuario_id == current_user_id)
     if servico_id:
         query = query.filter(Pagamento.servico_id == servico_id)
     if cliente_id:
@@ -51,7 +53,11 @@ def listar_pagamentos(
 
 # 🔹 CRIAR PAGAMENTO
 @router.post("", response_model=PagamentoOut)
-def criar_pagamento(pagamento: PagamentoCreate, db: Session = Depends(get_db)):
+def criar_pagamento(
+    pagamento: PagamentoCreate,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
     servico = db.query(Servico).filter(Servico.id == pagamento.servico_id).first()
     if not servico:
         raise HTTPException(status_code=404, detail="Serviço não encontrado")
@@ -64,6 +70,7 @@ def criar_pagamento(pagamento: PagamentoCreate, db: Session = Depends(get_db)):
         valor_pago=pagamento.valor_pago,
         data_pagamento=pagamento.data_pagamento,
         valor_pendente=valor_pendente,
+        usuario_id=current_user_id,
     )
     db.add(novo_pagamento)
 

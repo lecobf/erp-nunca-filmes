@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float
+from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from ..core.db import Base
 
 class Equipamento(Base):
@@ -8,3 +8,4 @@ class Equipamento(Base):
     categoria = Column(String, nullable=True)
     valor_aluguel = Column(Float, nullable=False)
     quantidade = Column(Integer, nullable=False, default=0)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)

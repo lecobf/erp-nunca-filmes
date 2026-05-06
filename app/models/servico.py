@@ -25,6 +25,7 @@ class Servico(Base):
     valor_pendente_atual = Column(Float, default=0.0)
 
     is_pacote = Column(Boolean, nullable=False, default=False)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
     cliente = relationship("Cliente", back_populates="servicos")
     pagamentos = relationship("Pagamento", back_populates="servico", cascade="all,delete")

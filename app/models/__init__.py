@@ -5,6 +5,7 @@ garantindo que o SQLAlchemy reconheça todas as classes antes
 de inicializar o mapeamento.
 """
 
+from .usuario import Usuario
 from .cliente import Cliente
 from .equipamento import Equipamento
 from .servico_equipamento import ServicoEquipamento

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from ..core.db import Base
 
@@ -10,6 +10,7 @@ class Cliente(Base):
     email = Column(String, nullable=True)
     telefone = Column(String, nullable=True)
     cpf_cnpj = Column(String, nullable=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
     # ✅ um cliente pode ter vários serviços
     servicos = relationship("Servico", back_populates="cliente")

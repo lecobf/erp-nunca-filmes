@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.core.db import get_db
+from app.core.security import get_current_user_id
 from app.models.servico import Servico
 from app.models.pagamento import Pagamento
 from app.models.custo import Custo
@@ -33,6 +34,7 @@ def dashboard_periodo(
     data_inicio: str = Query(None, description="Data inicial (YYYY-MM-DD)"),
     data_fim: str = Query(None, description="Data final (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
 ):
     hoje = date.today()
     ano = ano or hoje.year
@@ -40,7 +42,10 @@ def dashboard_periodo(
     fim = parse_date(data_fim, date(ano, 12, 31))
 
     def calc(tipo: str | None = None):
-        filtros_servico = [Servico.data_contratacao.between(inicio, fim)]
+        filtros_servico = [
+            Servico.data_contratacao.between(inicio, fim),
+            Servico.usuario_id == current_user_id,
+        ]
         if tipo:
             filtros_servico.append(Servico.tipo_servico == tipo)
 
@@ -54,7 +59,10 @@ def dashboard_periodo(
         # Receita recebida (pagamentos efetivados no período)
         receita_recebida = (
             db.query(func.coalesce(func.sum(Pagamento.valor_pago), 0.0))
-            .filter(Pagamento.data_pagamento.between(inicio, fim))
+            .filter(
+                Pagamento.data_pagamento.between(inicio, fim),
+                Pagamento.usuario_id == current_user_id,
+            )
             .scalar()
         )
 
@@ -65,6 +73,7 @@ def dashboard_periodo(
             .filter(
                 Servico.data_contratacao < inicio,
                 Pagamento.data_pagamento.between(inicio, fim),
+                Pagamento.usuario_id == current_user_id,
                 *( [Servico.tipo_servico == tipo] if tipo else [] ),
             )
             .scalar()
@@ -78,20 +87,26 @@ def dashboard_periodo(
         )
 
         # A receber retroativo
-        filtros_retro = []
+        filtros_retro = [
+            Servico.data_contratacao < inicio,
+            Servico.usuario_id == current_user_id,
+        ]
         if tipo:
             filtros_retro.append(Servico.tipo_servico == tipo)
 
         a_receber_retroativo = (
             db.query(func.coalesce(func.sum(Servico.valor_pendente_atual), 0.0))
-            .filter(Servico.data_contratacao < inicio, *filtros_retro)
+            .filter(*filtros_retro)
             .scalar()
         )
 
         # Custos do período
         custos = (
             db.query(func.coalesce(func.sum(Custo.valor), 0.0))
-            .filter(Custo.data.between(inicio, fim))
+            .filter(
+                Custo.data.between(inicio, fim),
+                Custo.usuario_id == current_user_id,
+            )
             .scalar()
         )
 
@@ -121,6 +136,7 @@ def dashboard_periodo(
                 .join(Servico, Pagamento.servico_id == Servico.id)
                 .filter(
                     Pagamento.data_pagamento.between(inicio, fim),
+                    Pagamento.usuario_id == current_user_id,
                     Servico.tipo_servico == tipo,
                 )
                 .group_by(mes_pag)
@@ -133,7 +149,10 @@ def dashboard_periodo(
                     mes_pag,
                     func.coalesce(func.sum(Pagamento.valor_pago), 0.0).label("valor_recebido"),
                 )
-                .filter(Pagamento.data_pagamento.between(inicio, fim))
+                .filter(
+                    Pagamento.data_pagamento.between(inicio, fim),
+                    Pagamento.usuario_id == current_user_id,
+                )
                 .group_by(mes_pag)
                 .order_by(mes_pag.asc())
                 .all()
@@ -177,6 +196,7 @@ def dashboard_periodo(
 def top_clientes_pagamentos(
     ano: int = Query(None, description="Ano de referência"),
     db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
 ):
     ano = ano or datetime.now().year
     inicio = datetime(ano, 1, 1)
@@ -192,7 +212,10 @@ def top_clientes_pagamentos(
         )
         .join(Servico, Servico.cliente_id == Cliente.id)
         .join(Pagamento, Pagamento.servico_id == Servico.id)
-        .filter(Pagamento.data_pagamento.between(inicio, fim))
+        .filter(
+            Pagamento.data_pagamento.between(inicio, fim),
+            Pagamento.usuario_id == current_user_id,
+        )
         .group_by(Cliente.id, Cliente.nome)
         .order_by(total_label.desc())
         .all()

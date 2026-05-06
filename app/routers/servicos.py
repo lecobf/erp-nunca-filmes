@@ -13,6 +13,7 @@ from ..models.cliente import Cliente
 from ..models.equipamento import Equipamento
 from ..models.servico_equipamento import ServicoEquipamento
 from ..schemas.servico import ServicoCreate, ServicoOut, ServicoEquipamentoIn
+from ..core.security import get_current_user_id
 
 router = APIRouter(prefix="/servicos", tags=["servicos"])
 
@@ -112,8 +113,9 @@ def listar_servicos(
     tipo_servico: str | None = Query(None),
     ano: int | None = Query(None),
     mes: int | None = Query(None),
+    current_user_id: int = Depends(get_current_user_id),
 ):
-    query = db.query(Servico)
+    query = db.query(Servico).filter(Servico.usuario_id == current_user_id)
 
     if status:
         query = query.filter(Servico.status == status)
@@ -178,7 +180,11 @@ def listar_servicos(
 
 # ---------- CRIAR ----------
 @router.post("", response_model=dict)
-def criar_servico(payload: ServicoCreate, db: Session = Depends(get_db)):
+def criar_servico(
+    payload: ServicoCreate,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
     datas = sorted(payload.datas or [])
     numero_diarias = max(len(datas), 1)
     data_contratacao = datas[0] if datas else datetime.date.today()
@@ -207,6 +213,7 @@ def criar_servico(payload: ServicoCreate, db: Session = Depends(get_db)):
         status="pendente",
         is_pacote=payload.is_pacote,
         valor_pendente_atual=valor_final,
+        usuario_id=current_user_id,
     )
     db.add(s)
     db.flush()
@@ -243,8 +250,13 @@ def criar_servico(payload: ServicoCreate, db: Session = Depends(get_db)):
 
 # ---------- ATUALIZAR ----------
 @router.put("/{servico_id}", response_model=dict)
-def atualizar_servico(servico_id: int, payload: ServicoCreate, db: Session = Depends(get_db)):
-    s = db.query(Servico).filter(Servico.id == servico_id).first()
+def atualizar_servico(
+    servico_id: int,
+    payload: ServicoCreate,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    s = db.query(Servico).filter(Servico.id == servico_id, Servico.usuario_id == current_user_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Serviço não encontrado")
 
@@ -305,8 +317,12 @@ def atualizar_servico(servico_id: int, payload: ServicoCreate, db: Session = Dep
 
 # ---------- DELETAR ----------
 @router.delete("/{servico_id}")
-def deletar_servico(servico_id: int, db: Session = Depends(get_db)):
-    s = db.query(Servico).filter(Servico.id == servico_id).first()
+def deletar_servico(
+    servico_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    s = db.query(Servico).filter(Servico.id == servico_id, Servico.usuario_id == current_user_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Serviço não encontrado")
     db.delete(s)
@@ -322,8 +338,9 @@ def listar_servicos_periodo(
     data_fim: Optional[datetime.date] = Query(None),
     ano: Optional[int] = Query(None),
     mes: Optional[int] = Query(None),
+    current_user_id: int = Depends(get_current_user_id),
 ):
-    query = db.query(Servico)
+    query = db.query(Servico).filter(Servico.usuario_id == current_user_id)
     if data_inicio and data_fim:
         query = query.filter(Servico.data_contratacao.between(data_inicio, data_fim))
     elif ano and mes:
@@ -373,7 +390,11 @@ def listar_servicos_periodo(
 
 # ---------- COMBO ----------
 @router.get("/combo")
-def listar_servicos_combo(pendentes: bool = False, db: Session = Depends(get_db)):
+def listar_servicos_combo(
+    pendentes: bool = False,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
     servicos = (
         db.query(
             Servico.id,
@@ -382,6 +403,7 @@ def listar_servicos_combo(pendentes: bool = False, db: Session = Depends(get_db)
             Servico.valor_final,
         )
         .join(Cliente, Cliente.id == Servico.cliente_id)
+        .filter(Servico.usuario_id == current_user_id)
         .order_by(Cliente.nome, Servico.descricao)
         .all()
     )
@@ -411,8 +433,12 @@ def listar_servicos_combo(pendentes: bool = False, db: Session = Depends(get_db)
 
 # ---------- EQUIPAMENTOS DE UM SERVIÇO ----------
 @router.get("/{servico_id}/equipamentos", response_model=list[dict])
-def listar_itens_servico(servico_id: int, db: Session = Depends(get_db)):
-    s = db.query(Servico).filter(Servico.id == servico_id).first()
+def listar_itens_servico(
+    servico_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
+    s = db.query(Servico).filter(Servico.id == servico_id, Servico.usuario_id == current_user_id).first()
     if not s:
         raise HTTPException(status_code=404, detail="Serviço não encontrado")
     itens = db.query(ServicoEquipamento).filter(ServicoEquipamento.servico_id == s.id).all()
@@ -435,16 +461,18 @@ def listar_servicos_calendario(
     inicio: date = Query(...),
     fim: date = Query(...),
     db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
 ):
     """Retorna serviços que possuem ao menos uma data dentro do intervalo informado."""
     servicos = (
         db.query(Servico)
         .filter(
+            Servico.usuario_id == current_user_id,
             exists().where(
                 ServicoDatas.servico_id == Servico.id,
                 ServicoDatas.data >= inicio,
                 ServicoDatas.data <= fim,
-            )
+            ),
         )
         .all()
     )
@@ -480,11 +508,15 @@ def listar_servicos_calendario(
 
 # ---------- DETALHE ----------
 @router.get("/{servico_id}", response_model=dict)
-def obter_servico(servico_id: int, db: Session = Depends(get_db)):
+def obter_servico(
+    servico_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id),
+):
     s = (
         db.query(Servico)
         .options(joinedload(Servico.servico_equipamentos).joinedload(ServicoEquipamento.equipamento))
-        .filter(Servico.id == servico_id)
+        .filter(Servico.id == servico_id, Servico.usuario_id == current_user_id)
         .first()
     )
     if not s:

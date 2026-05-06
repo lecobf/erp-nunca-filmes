@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 import os
 
 # Importa os routers
@@ -11,11 +12,62 @@ from app.routers.pagamentos import router as pagamentos_router
 from app.routers.custos import router as custos_router
 from app.routers.equipamentos import router as equipamentos_router
 from app.routers.dashboard import router as dashboard_router
+from app.routers.auth import router as auth_router
+
+# Importa modelos e banco
+from app.core.db import engine, SessionLocal
+from app.models import *  # garante que todos os modelos são registrados
+from app.core.db import Base
+from app.models.usuario import Usuario
+from app.core.security import hash_password
+
+
+# ============================================================
+# 🔹 Evento de startup
+# ============================================================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Cria tabelas
+    Base.metadata.create_all(bind=engine)
+
+    # Cria usuário admin se não existir
+    db: Session = SessionLocal()
+    try:
+        admin = db.query(Usuario).filter(Usuario.email == "admin@nuncafilmes.com").first()
+        if not admin:
+            admin = Usuario(
+                nome="Admin",
+                email="admin@nuncafilmes.com",
+                senha_hash=hash_password("admin123"),
+            )
+            db.add(admin)
+            db.commit()
+            db.refresh(admin)
+            print("[STARTUP] Usuário admin criado com sucesso.")
+
+        admin_id = admin.id
+
+        # Associa registros sem usuario_id ao admin
+        for tabela in ("clientes", "servicos", "pagamentos", "custos", "equipamentos"):
+            db.execute(
+                text(f"UPDATE {tabela} SET usuario_id = :uid WHERE usuario_id IS NULL"),
+                {"uid": admin_id},
+            )
+        db.commit()
+        print("[STARTUP] Registros órfãos associados ao admin.")
+    except Exception as e:
+        print(f"[STARTUP] Erro: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+    yield
+
 
 # ============================================================
 # 🔹 Inicialização da aplicação
 # ============================================================
-app = FastAPI(title="ERP Backend", version="1.0")
+app = FastAPI(title="ERP Backend", version="1.0", lifespan=lifespan)
 
 # ============================================================
 # 🔹 Middleware CORS (oficial do FastAPI)
@@ -35,6 +87,7 @@ app.add_middleware(
 # ============================================================
 # 🔹 Inclui routers
 # ============================================================
+app.include_router(auth_router)
 app.include_router(clientes_router)
 app.include_router(servicos_router)
 app.include_router(pagamentos_router)
