@@ -31,9 +31,9 @@ def resumo_a_receber(
         query = query.filter(Servico.cliente_id == cliente_id)
 
     if data_inicio:
-        query = query.filter(Servico.data_previsao_pagamento >= date.fromisoformat(data_inicio))
+        query = query.filter(Servico.data_contratacao >= date.fromisoformat(data_inicio))
     if data_fim:
-        query = query.filter(Servico.data_previsao_pagamento <= date.fromisoformat(data_fim))
+        query = query.filter(Servico.data_contratacao <= date.fromisoformat(data_fim))
 
     servicos = query.all()
 
