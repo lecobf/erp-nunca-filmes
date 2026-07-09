@@ -1,8 +1,9 @@
 ﻿import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import IconButton from "../components/IconButton";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "../api/config";
+import ModalServicoCalendario from "../components/calendario/ModalServicoCalendario";
 
 const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
@@ -75,7 +76,6 @@ function monthNamePt(monthIndex0) {
 }
 
 export default function Calendario() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const now = new Date();
@@ -84,6 +84,11 @@ export default function Calendario() {
 
   const [ano, setAno] = useState(urlAno);
   const [mes, setMes] = useState(urlMes); // 1-12
+
+  // Modal de servico (criar/editar), aberta sem sair da tela de Calendario
+  const [modalAberto, setModalAberto] = useState(false);
+  const [servicoIdSelecionado, setServicoIdSelecionado] = useState(null);
+  const [dataSelecionada, setDataSelecionada] = useState(null);
   const [servicos, setServicos] = useState([]);
 
   // Mantém state sincronizado com URL quando usuário navega por histórico/refresh
@@ -227,12 +232,21 @@ export default function Calendario() {
   }
 
   function onClickDia(dateObj) {
-    const iso = toISODate(dateObj);
-    navigate(`/servicos?data=${iso}&from=calendario&ano=${ano}&mes=${mes}`);
+    setServicoIdSelecionado(null);
+    setDataSelecionada(toISODate(dateObj));
+    setModalAberto(true);
   }
 
   function onClickEvento(evId) {
-    navigate(`/servicos?edit=${evId}&from=calendario&ano=${ano}&mes=${mes}`);
+    setDataSelecionada(null);
+    setServicoIdSelecionado(evId);
+    setModalAberto(true);
+  }
+
+  function fecharModalServico() {
+    setModalAberto(false);
+    setServicoIdSelecionado(null);
+    setDataSelecionada(null);
   }
 
   const hoje = new Date();
@@ -407,6 +421,14 @@ export default function Calendario() {
       <div className="mt-3 text-xs text-gray-600">
         Dica: clique em um dia vazio para criar um serviço nessa data; clique na barra colorida para editar.
       </div>
+
+      <ModalServicoCalendario
+        isOpen={modalAberto}
+        servicoId={servicoIdSelecionado}
+        dataInicial={dataSelecionada}
+        onClose={fecharModalServico}
+        onSalvo={carregarServicos}
+      />
     </div>
   );
 }
