@@ -382,7 +382,7 @@ export default function Calendario() {
 
                     const top = HEADER_H + laneIdx * (BAR_H + BAR_GAP);
 
-                    const bgClass = "bg-red-500";
+                    const bgClass = seg.ev.raw?.tipo_servico === "Aluguel" ? "bg-orange-500" : "bg-red-500";
                     const textClass = "text-white";
 
                     return (
@@ -403,7 +403,7 @@ export default function Calendario() {
                         }}
                         title={seg.ev.titulo}
                       >
-                        <div className={`${bgClass} ${textClass} rounded-sm h-full flex items-center overflow-hidden`}>
+                        <div className={`${bgClass} ${textClass} rounded-md h-full flex items-center overflow-hidden`}>
                           <div className="text-[12px] font-semibold truncate">
                             {seg.isStartHere ? seg.ev.titulo : ""}
                           </div>
