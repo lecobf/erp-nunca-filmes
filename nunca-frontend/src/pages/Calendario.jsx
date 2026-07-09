@@ -252,14 +252,15 @@ export default function Calendario() {
   const hoje = new Date();
   const baseMes = new Date(ano, mes - 1, 1);
 
-  // ✅ AJUSTES VISUAIS
-  const HEADER_H = 32;
-  const BAR_H = 22;
-  const BAR_GAP = 6;
-  const WEEK_PADDING_BOTTOM = 14;
+  // ✅ AJUSTES VISUAIS (reduzido pra caber mais linhas na tela sem scroll —
+  // ainda comporta confortavelmente ate 4 itens empilhados no mesmo dia)
+  const HEADER_H = 26;
+  const BAR_H = 18;
+  const BAR_GAP = 4;
+  const WEEK_PADDING_BOTTOM = 8;
 
   // ✅ altura mínima por semana (estilo Google Calendar)
-  const WEEK_MIN_HEIGHT = 150;
+  const WEEK_MIN_HEIGHT = 96;
 
   return (
     <div className="p-4">
