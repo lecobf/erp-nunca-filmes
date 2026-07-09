@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Cria instância global do Axios
 const api = axios.create({
-  baseURL: 'http://localhost:8000', // ajuste conforme seu backend local
+  baseURL: '/api', // ajuste conforme seu backend local
   timeout: 30000, // 30 segundos
 });
 

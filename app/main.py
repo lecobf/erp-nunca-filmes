@@ -76,6 +76,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://nuncafilmes.duckdns.org",
+        "https://erp.nuncafilmes.com",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],
@@ -110,14 +111,16 @@ async def ensure_cors(request, call_next):
     """
     Garante CORS válido para qualquer ambiente:
     - Local (http://localhost:5173)
-    - Produção (https://nuncafilmes.duckdns.org)
+    - Produção (https://nuncafilmes.duckdns.org, https://erp.nuncafilmes.com)
     """
     response = await call_next(request)
 
     # Detecta ambiente de execução
+    origin = request.headers.get("origin", "")
+    origens_producao = ["https://nuncafilmes.duckdns.org", "https://erp.nuncafilmes.com"]
     allowed_origin = "https://nuncafilmes.duckdns.org"
-    if "localhost" in request.headers.get("origin", "") or "127.0.0.1" in request.headers.get("origin", ""):
-        allowed_origin = request.headers.get("origin", allowed_origin)
+    if origin in origens_producao or "localhost" in origin or "127.0.0.1" in origin:
+        allowed_origin = origin
 
     response.headers["Access-Control-Allow-Origin"] = allowed_origin
     response.headers["Access-Control-Allow-Credentials"] = "true"

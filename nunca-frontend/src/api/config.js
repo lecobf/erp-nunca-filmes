@@ -11,7 +11,7 @@ import axios from "axios";
 // ============================================================
 // 🔧 Base URL vinda do .env (configurado no vite.config.js)
 // ============================================================
-export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
 
 console.log(`🌍 API_BASE_URL carregada: ${API_BASE_URL}`);
 
