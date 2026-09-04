@@ -4,7 +4,7 @@ import Modal from "../Modal";
 import CurrencyInput from "../CurrencyInput";
 import DateInput from "../DateInput";
 import { fmtBRL, fmtDateBR } from "../../utils/formatters";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Printer } from "lucide-react";
 import ModalEquipamentos from "../servicos/ModalEquipamentos";
 import ModalOrcamento from "../servicos/ModalOrcamento";
 
@@ -303,8 +303,18 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
 
             <label className="col-span-6 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Previsão Pgto
-              <DateInput value={form.data_previsao_pagamento || ""}
-                onChange={(d) => setForm((prev) => ({ ...prev, data_previsao_pagamento: d }))} />
+              <div className="flex items-center gap-1.5">
+                <DateInput value={form.data_previsao_pagamento || ""}
+                  onChange={(d) => setForm((prev) => ({ ...prev, data_previsao_pagamento: d }))} />
+                <button
+                  type="button"
+                  onClick={() => setOrcamentoAberto(true)}
+                  title="Visualizar Orçamento"
+                  className="h-8 w-8 flex items-center justify-center rounded border border-neutral-300 text-neutral-500 hover:bg-neutral-100 hover:text-primary-600 transition-colors shrink-0"
+                >
+                  <Printer size={14} />
+                </button>
+              </div>
             </label>
 
             {modoEdicao && (
@@ -327,14 +337,9 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
                   Excluir
                 </button>
               ) : <span />}
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setOrcamentoAberto(true)} className="btn-secondary text-xs">
-                  Ver Orçamento
-                </button>
-                <button type="button" onClick={salvar} className="btn-primary">
-                  {modoEdicao ? "Salvar Alterações" : "Salvar Serviço"}
-                </button>
-              </div>
+              <button type="button" onClick={salvar} className="btn-primary">
+                {modoEdicao ? "Salvar Alterações" : "Salvar Serviço"}
+              </button>
             </div>
           </div>
         )}
