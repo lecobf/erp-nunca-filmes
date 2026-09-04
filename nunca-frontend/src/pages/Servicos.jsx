@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { api } from "../api/config";
-import Modal from "../components/Modal";
-import CurrencyInput from "../components/CurrencyInput";
-import DateInput from "../components/DateInput";
 import { fmtBRL, fmtDateBR } from "../utils/formatters";
-import { Pencil, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, X } from "lucide-react";
+import { Pencil, Trash2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
 import IconButton from "../components/IconButton";
 import SortTh from "../components/SortTh";
 import { useSortTable } from "../hooks/useSortTable";
-import ModalEquipamentos from "../components/servicos/ModalEquipamentos";
-import ModalOrcamento from "../components/servicos/ModalOrcamento";
+import ModalServicoCalendario from "../components/calendario/ModalServicoCalendario";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 const MESES = [
@@ -22,37 +18,6 @@ function StatusBadge({ status }) {
   const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : "—";
   return <span className={map[status] ?? "badge-gray"}>{label}</span>;
 }
-
-function DateChip({ date, onRemove }) {
-  return (
-    <span className="inline-flex items-center gap-0.5 pl-2 pr-1 py-0.5 bg-primary-50 border border-primary-200 rounded text-xs text-primary-700 font-medium whitespace-nowrap">
-      {fmtDateBR(date)}
-      <button type="button" tabIndex={-1}
-        className="ml-0.5 text-primary-400 hover:text-primary-700 leading-none"
-        onClick={() => onRemove(date)}>
-        <X size={10} />
-      </button>
-    </span>
-  );
-}
-
-const dataHoje = new Date().toISOString().split("T")[0];
-
-const emptyForm = () => ({
-  tipo_servico: "Job",
-  cliente_id: "",
-  descricao: "",
-  datas: [dataHoje],
-  valor_diaria_cache: 0,
-  valor_diaria_equipamentos: 0,
-  valor_total: 0,
-  valor_desconto: 0,
-  valor_final: 0,
-  data_previsao_pagamento: null,
-  status: "pendente",
-  equipamentos: [],
-  is_pacote: false,
-});
 
 export default function Servicos() {
   const [servicos, setServicos] = useState([]);
@@ -67,15 +32,10 @@ export default function Servicos() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  const [formData, setFormData] = useState(emptyForm());
-  const [novaData, setNovaData] = useState("");
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [servicoEditando, setServicoEditando] = useState(null);
-  const [novaDataEdit, setNovaDataEdit] = useState("");
-  const [modalEquipOpen, setModalEquipOpen] = useState(false);
-  const [modalEquipEditOpen, setModalEquipEditOpen] = useState(false);
-  const [orcamentoAberto, setOrcamentoAberto] = useState(false);
+  // Controla o modal único de criar/editar
+  const [modalAberto, setModalAberto] = useState(false);
+  const [servicoModalId, setServicoModalId] = useState(null); // null = criação
+  const [dataInicial, setDataInicial] = useState(null);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -84,21 +44,19 @@ export default function Servicos() {
   const calendarioAno = searchParams.get("ano");
   const calendarioMes = searchParams.get("mes");
 
-  function voltarParaCalendarioSePreciso() {
-    if (!veioDoCalendario) return false;
-    const a = calendarioAno ? Number(calendarioAno) : new Date().getFullYear();
-    const m = calendarioMes ? Number(calendarioMes) : (new Date().getMonth() + 1);
-    navigate(`/calendario?ano=${a}&mes=${m}`);
-    return true;
-  }
-
   useEffect(() => { carregarServicos(); carregarClientes(); }, []);
 
+  // Abre modal de criação com data pré-preenchida quando vem do Calendário via ?data=
   useEffect(() => {
     const dataParam = searchParams.get("data");
-    if (dataParam) setFormData((prev) => ({ ...prev, datas: [dataParam] }));
+    if (dataParam) {
+      setDataInicial(dataParam);
+      setServicoModalId(null);
+      setModalAberto(true);
+    }
   }, [searchParams]);
 
+  // Abre modal de edição quando a URL tem ?edit=ID
   const lastEditRef = useRef(null);
   useEffect(() => {
     const editParam = searchParams.get("edit");
@@ -106,21 +64,11 @@ export default function Servicos() {
       const idNum = Number(editParam);
       if (Number.isFinite(idNum) && String(lastEditRef.current) !== String(idNum)) {
         lastEditRef.current = idNum;
-        abrirEdicao(idNum);
+        setServicoModalId(idNum);
+        setModalAberto(true);
       }
     }
   }, [searchParams]);
-
-  // Recalcula totais sempre que mudar cachê, equipamentos, datas ou desconto
-  useEffect(() => {
-    const nDiarias = formData.datas.length || 1;
-    const total = (Number(formData.valor_diaria_cache) + Number(formData.valor_diaria_equipamentos)) * nDiarias;
-    setFormData((prev) => ({
-      ...prev,
-      valor_total: total,
-      valor_final: Math.max(0, total - Number(prev.valor_desconto || 0)),
-    }));
-  }, [formData.valor_diaria_cache, formData.valor_diaria_equipamentos, formData.datas.length, formData.valor_desconto]);
 
   async function carregarServicos() {
     const resp = await api.get("/servicos");
@@ -132,184 +80,29 @@ export default function Servicos() {
     setClientes(resp.data || []);
   }
 
-  // ---------- helpers datas (form novo) ----------
-  function adicionarDataForm(d) {
-    if (!d) return;
-    setFormData((prev) => {
-      if (prev.datas.includes(d)) return prev;
-      return { ...prev, datas: [...prev.datas, d].sort() };
-    });
-    setNovaData("");
+  function abrirCriar() {
+    setServicoModalId(null);
+    setDataInicial(new Date().toISOString().split("T")[0]); // pré-preenche com hoje
+    setModalAberto(true);
   }
 
-  function removerDataForm(d) {
-    setFormData((prev) => ({ ...prev, datas: prev.datas.filter((x) => x !== d) }));
+  function abrirEdicao(id) {
+    setServicoModalId(id);
+    setModalAberto(true);
   }
 
-  // ---------- helpers datas (modal edição) ----------
-  function adicionarDataEdit(d) {
-    if (!d) return;
-    setServicoEditando((prev) => {
-      const datas = prev.datas || [];
-      if (datas.includes(d)) return prev;
-      return { ...prev, datas: [...datas, d].sort() };
-    });
-    setNovaDataEdit("");
+  function fecharModal() {
+    setModalAberto(false);
+    setDataInicial(null);
   }
 
-  function removerDataEdit(d) {
-    setServicoEditando((prev) => ({
-      ...prev,
-      datas: (prev.datas || []).filter((x) => x !== d),
-    }));
-  }
-
-  // ---------- equipamentos ----------
-  function calcTotalEquip(lista) {
-    return (lista || []).reduce((acc, e) => {
-      const v = Number(e.valor_diaria ?? e.valor_aluguel ?? e.valor ?? 0) || 0;
-      const q = Number(e.quantidade ?? e.qtd ?? 1) || 1;
-      return acc + v * q;
-    }, 0);
-  }
-
-  function handleConfirmarEquip(lista) {
-    setFormData((prev) => ({
-      ...prev,
-      equipamentos: lista || [],
-      valor_diaria_equipamentos: prev.is_pacote ? prev.valor_diaria_equipamentos : calcTotalEquip(lista),
-    }));
-    setModalEquipOpen(false);
-  }
-
-  function handleConfirmarEquipEdit(lista) {
-    setServicoEditando((prev) => ({
-      ...prev,
-      equipamentos: lista || [],
-      valor_diaria_equipamentos: prev.is_pacote ? prev.valor_diaria_equipamentos : calcTotalEquip(lista),
-    }));
-    setModalEquipEditOpen(false);
-  }
-
-  // ---------- submit ----------
-  async function handleSubmit(e) {
-    e.preventDefault();
-    try {
-      const datas = formData.datas.sort();
-      if (datas.length === 0) { alert("Adicione ao menos uma data de trabalho."); return; }
-      if (!formData.cliente_id) { alert("Selecione um cliente."); return; }
-      const nDiarias = datas.length;
-      const vCache = Number(formData.valor_diaria_cache) || 0;
-      const vEqp   = Number(formData.valor_diaria_equipamentos) || 0;
-      const vDesc  = Number(formData.valor_desconto) || 0;
-      const valor_total = (vCache + vEqp) * nDiarias;
-      const valor_final = Math.max(0, valor_total - vDesc);
-      const mappedEquipamentos = (formData.equipamentos || [])
-        .map((e) => ({ equipamento_id: e.equipamento_id ?? e.id ?? e?.equipamento?.id, quantidade: Number(e.quantidade ?? e.qtd ?? 1) || 1 }))
-        .filter((e) => e.equipamento_id != null);
-      const payload = {
-        tipo_servico: formData.tipo_servico,
-        cliente_id: Number(formData.cliente_id),
-        descricao: formData.descricao,
-        datas,
-        valor_diaria_cache: vCache,
-        valor_diaria_equipamentos: vEqp,
-        valor_desconto: vDesc,
-        data_previsao_pagamento: formData.data_previsao_pagamento || null,
-        status: formData.status || "pendente",
-        is_pacote: !!formData.is_pacote,
-        equipamentos: formData.is_pacote ? [] : mappedEquipamentos,
-      };
-      if (!payload.is_pacote && payload.equipamentos.length === 0) {
-        alert("Selecione ao menos um equipamento ou marque 'É pacote'.");
-        return;
-      }
-      await api.post("/servicos", payload);
-      setFormData(emptyForm());
-      setNovaData("");
-      await carregarServicos();
-      if (voltarParaCalendarioSePreciso()) return;
-    } catch (err) {
-      const data = err?.response?.data;
-      let msg = err?.message || "Erro desconhecido";
-      if (data?.detail) {
-        try { msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail, null, 2); }
-        catch { msg = String(data.detail); }
-      }
-      alert(`Erro ao criar serviço:\n${msg}`);
-    }
-  }
-
-  async function abrirEdicao(servicoId) {
-    const resp = await api.get(`/servicos/${servicoId}`);
-    const s = resp.data?.servico || resp.data;
-    const datasNorm = (s.datas || []).map((d) =>
-      typeof d === "string" ? d.slice(0, 10) : String(d).slice(0, 10)
-    ).sort();
-    setServicoEditando({
-      ...s,
-      datas: datasNorm,
-      cliente_id: s.cliente_id?.toString?.() ?? "",
-      valor_diaria_cache: s.valor_diaria_cache ?? 0,
-      valor_diaria_equipamentos: s.valor_diaria_equipamentos ?? 0,
-      valor_desconto: s.valor_desconto ?? 0,
-      valor_total: s.valor_total ?? 0,
-      valor_final: s.valor_final ?? 0,
-      data_previsao_pagamento: s.data_previsao_pagamento?.split?.("T")?.[0] || null,
-      equipamentos: Array.isArray(s.equipamentos) ? s.equipamentos : [],
-      status: s.status || "pendente",
-      is_pacote: !!s.is_pacote,
-    });
-    setModalOpen(true);
-  }
-
-  // Totais calculados dinamicamente para o modal de edição
-  const totaisEdit = useMemo(() => {
-    if (!servicoEditando) return { total: 0, final: 0 };
-    const nDiarias = (servicoEditando.datas || []).length || 1;
-    const total = (Number(servicoEditando.valor_diaria_cache) || 0 + Number(servicoEditando.valor_diaria_equipamentos) || 0) * nDiarias;
-    return { total, final: Math.max(0, total - (Number(servicoEditando.valor_desconto) || 0)) };
-  }, [servicoEditando?.valor_diaria_cache, servicoEditando?.valor_diaria_equipamentos, servicoEditando?.datas?.length, servicoEditando?.valor_desconto]);
-
-  async function salvarServico() {
-    if (!servicoEditando) return;
-    try {
-      const datas = (servicoEditando.datas || []).sort();
-      if (datas.length === 0) { alert("Adicione ao menos uma data de trabalho."); return; }
-      if (!servicoEditando.cliente_id) { alert("Selecione um cliente."); return; }
-      const nDiarias = datas.length;
-      const vCache = Number(servicoEditando.valor_diaria_cache) || 0;
-      const vEqp   = Number(servicoEditando.valor_diaria_equipamentos) || 0;
-      const vDesc  = Number(servicoEditando.valor_desconto) || 0;
-      const mappedEquipamentos = (servicoEditando.equipamentos || [])
-        .map((e) => ({ equipamento_id: e.equipamento_id ?? e.id ?? e?.equipamento?.id, quantidade: Number(e.quantidade ?? e.qtd ?? 1) || 1 }))
-        .filter((e) => e.equipamento_id != null);
-      await api.put(`/servicos/${servicoEditando.id}`, {
-        tipo_servico: servicoEditando.tipo_servico,
-        cliente_id: Number(servicoEditando.cliente_id),
-        descricao: servicoEditando.descricao,
-        datas,
-        valor_diaria_cache: vCache,
-        valor_diaria_equipamentos: vEqp,
-        valor_desconto: vDesc,
-        data_previsao_pagamento: servicoEditando.data_previsao_pagamento || null,
-        status: servicoEditando.status,
-        is_pacote: !!servicoEditando.is_pacote,
-        equipamentos: servicoEditando.is_pacote ? [] : mappedEquipamentos,
-      });
-      setModalOpen(false);
-      setServicoEditando(null);
-      setNovaDataEdit("");
-      await carregarServicos();
-      if (voltarParaCalendarioSePreciso()) return;
-    } catch (err) {
-      const data = err?.response?.data;
-      let msg = err?.message || "Erro desconhecido";
-      if (data?.detail) {
-        try { msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail, null, 2); }
-        catch { msg = String(data.detail); }
-      }
-      alert(`Erro ao salvar serviço:\n${msg}`);
+  // Chamado após criar, editar ou excluir com sucesso
+  function handleSalvo() {
+    carregarServicos();
+    if (veioDoCalendario) {
+      const a = calendarioAno ? Number(calendarioAno) : new Date().getFullYear();
+      const m = calendarioMes ? Number(calendarioMes) : (new Date().getMonth() + 1);
+      navigate(`/calendario?ano=${a}&mes=${m}`);
     }
   }
 
@@ -317,7 +110,11 @@ export default function Servicos() {
     if (!window.confirm("Tem certeza que deseja excluir este serviço?")) return;
     await api.delete(`/servicos/${id}`);
     await carregarServicos();
-    if (voltarParaCalendarioSePreciso()) return;
+    if (veioDoCalendario) {
+      const a = calendarioAno ? Number(calendarioAno) : new Date().getFullYear();
+      const m = calendarioMes ? Number(calendarioMes) : (new Date().getMonth() + 1);
+      navigate(`/calendario?ano=${a}&mes=${m}`);
+    }
   }
 
   const servicosFiltrados = useMemo(() => {
@@ -355,141 +152,8 @@ export default function Servicos() {
       </div>
 
       <div className="page-body space-y-4">
-        {/* Formulário de inclusão */}
-        <form onSubmit={handleSubmit} className="card p-4">
-          <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-3">
-            Novo serviço
-          </p>
-          <div className="grid grid-cols-12 gap-x-3 gap-y-3">
 
-            {/* Linha 1: Tipo + Cliente + Descrição */}
-            <label className="col-span-2 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Tipo
-              <select value={formData.tipo_servico} className="w-full"
-                onChange={(e) => setFormData({ ...formData, tipo_servico: e.target.value })}>
-                <option value="Job">Job</option>
-                <option value="Aluguel">Aluguel</option>
-              </select>
-            </label>
-
-            <label className="col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Cliente
-              <select value={formData.cliente_id} className="w-full"
-                onChange={(e) => setFormData({ ...formData, cliente_id: e.target.value })}>
-                <option value="">Selecione…</option>
-                {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </select>
-            </label>
-
-            <label className="col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Descrição
-              <input type="text" value={formData.descricao} placeholder="Ex: Job Coca-Cola SP" className="w-full"
-                onChange={(e) => setFormData({ ...formData, descricao: e.target.value })} />
-            </label>
-
-            {/* Linha 2: Datas de trabalho */}
-            <div className="col-span-12 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Datas de Trabalho *
-              <div className="flex flex-wrap items-center gap-1.5 min-h-[34px] border border-neutral-300 rounded px-2 py-1.5 bg-white">
-                {formData.datas.map((d) => (
-                  <DateChip key={d} date={d} onRemove={removerDataForm} />
-                ))}
-                <DateInput
-                  value={novaData}
-                  placeholder="+ adicionar data"
-                  className="min-w-[130px] border-dashed text-neutral-400"
-                  onChange={(d) => { if (d) adicionarDataForm(d); setNovaData(""); }}
-                />
-              </div>
-              <span className="text-neutral-400">
-                {formData.datas.length} {formData.datas.length === 1 ? "diária" : "diárias"}
-              </span>
-            </div>
-
-            {/* Linha 3: Cachê [3] + Equipamentos+Pacote [5] + spacer [4] = 12 cols */}
-            {formData.tipo_servico === "Job" && (
-              <label className="col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-                Valor Diária Cachê
-                <CurrencyInput value={formData.valor_diaria_cache}
-                  onChange={(val) => setFormData({ ...formData, valor_diaria_cache: val })} />
-              </label>
-            )}
-
-            <label className={`${formData.tipo_servico === "Job" ? "col-span-5" : "col-span-8"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
-              Valor Diária Equipamentos
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <CurrencyInput
-                    value={Number(formData.valor_diaria_equipamentos) || 0}
-                    readOnly={!formData.is_pacote}
-                    onChange={(val) => setFormData((prev) => ({ ...prev, valor_diaria_equipamentos: val }))}
-                    className="w-full pr-10"
-                  />
-                  <button type="button" disabled={formData.is_pacote} onClick={() => setModalEquipOpen(true)}
-                    title="Selecionar equipamentos"
-                    className={`absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded ${formData.is_pacote ? "bg-neutral-300 text-neutral-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}>
-                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>
-                    </svg>
-                  </button>
-                </div>
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap border border-neutral-300 rounded px-2 text-neutral-600">
-                  <input type="checkbox" checked={formData.is_pacote}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setFormData((prev) => ({ ...prev, is_pacote: checked, valor_diaria_equipamentos: checked ? prev.valor_diaria_equipamentos : 0, equipamentos: checked ? [] : prev.equipamentos }));
-                    }} />
-                  Pacote
-                </label>
-              </div>
-            </label>
-
-            <div className={`${formData.tipo_servico === "Job" ? "col-span-4" : "col-span-4"}`} />
-
-            {/* Linha 4: Totais + Previsão + Salvar */}
-            <label className="col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Valor Total
-              <input type="text" value={fmtBRL(formData.valor_total)} readOnly className="w-full bg-neutral-50" />
-            </label>
-            <label className="col-span-2 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Desconto
-              <CurrencyInput value={formData.valor_desconto}
-                onChange={(val) => setFormData({ ...formData, valor_desconto: val })} />
-            </label>
-            <label className="col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Valor Final
-              <input type="text" value={fmtBRL(formData.valor_final)} readOnly className="w-full bg-neutral-50" />
-            </label>
-            <label className="col-span-2 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Previsão Pgto
-              <DateInput value={formData.data_previsao_pagamento || ""}
-                onChange={(d) => setFormData((prev) => ({ ...prev, data_previsao_pagamento: d }))} />
-            </label>
-            <div className="col-span-2 flex flex-col items-end gap-1.5">
-              <button type="submit" className="btn-primary w-full">
-                <Plus size={14} />
-                Salvar Serviço
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrcamentoAberto(true)}
-                className="btn-secondary w-full text-xs"
-              >
-                Ver Orçamento
-              </button>
-            </div>
-          </div>
-        </form>
-
-        {/* Modal de orçamento */}
-        <ModalOrcamento
-          isOpen={orcamentoAberto}
-          onClose={() => setOrcamentoAberto(false)}
-          formData={{ ...formData, numero_diarias: formData.datas.length || 1 }}
-          clientes={clientes}
-        />
-
-        {/* Filtros */}
+        {/* Filtros + botão Novo Serviço */}
         <div className="filter-bar">
           <div className="filter-field">
             <span className="filter-label">Ano</span>
@@ -529,6 +193,12 @@ export default function Servicos() {
               <option value="Aluguel">Aluguel</option>
             </select>
           </div>
+
+          {/* Botão Novo Serviço — fica no final da barra de filtros */}
+          <button onClick={abrirCriar} className="btn-primary ml-auto flex items-center gap-1.5 whitespace-nowrap">
+            <Plus size={14} />
+            Novo Serviço
+          </button>
         </div>
 
         {/* Grid */}
@@ -630,154 +300,14 @@ export default function Servicos() {
         </div>
       </div>
 
-      {/* Modal edição */}
-      <Modal isOpen={modalOpen} onClose={() => { setModalOpen(false); setNovaDataEdit(""); }} title="Editar Serviço">
-        {servicoEditando && (
-          <div className="grid grid-cols-12 gap-3">
-
-            {/* Tipo */}
-            <label className="col-span-6 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Tipo
-              <select value={servicoEditando.tipo_servico || "Job"} className="w-full"
-                onChange={(e) => setServicoEditando({ ...servicoEditando, tipo_servico: e.target.value })}>
-                <option value="Job">Job</option>
-                <option value="Aluguel">Aluguel</option>
-              </select>
-            </label>
-
-            {/* Cliente */}
-            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Cliente
-              <select value={servicoEditando.cliente_id || ""} className="w-full"
-                onChange={(e) => setServicoEditando({ ...servicoEditando, cliente_id: e.target.value })}>
-                <option value="">Selecione…</option>
-                {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </select>
-            </label>
-
-            {/* Datas de trabalho */}
-            <div className="col-span-12 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Datas de Trabalho *
-              <div className="flex flex-wrap items-center gap-1.5 min-h-[34px] border border-neutral-300 rounded px-2 py-1.5 bg-white">
-                {(servicoEditando.datas || []).map((d) => (
-                  <DateChip key={d} date={d} onRemove={removerDataEdit} />
-                ))}
-                <DateInput
-                  value={novaDataEdit}
-                  placeholder="+ adicionar data"
-                  className="min-w-[130px] border-dashed text-neutral-400"
-                  onChange={(d) => { if (d) adicionarDataEdit(d); setNovaDataEdit(""); }}
-                />
-              </div>
-              <span className="text-neutral-400">
-                {(servicoEditando.datas || []).length} {(servicoEditando.datas || []).length === 1 ? "diária" : "diárias"}
-              </span>
-            </div>
-
-            {/* Descrição */}
-            <label className="col-span-12 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Descrição
-              <input type="text" value={servicoEditando.descricao || ""} placeholder="Ex: Job Coca-Cola SP" className="w-full"
-                onChange={(e) => setServicoEditando({ ...servicoEditando, descricao: e.target.value })} />
-            </label>
-
-            {/* Cachê */}
-            {servicoEditando?.tipo_servico === "Job" && (
-              <label className="col-span-12 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-                Valor Diária Cachê
-                <CurrencyInput value={Number(servicoEditando?.valor_diaria_cache) || 0} className="w-full"
-                  onChange={(val) => setServicoEditando({ ...servicoEditando, valor_diaria_cache: val })} />
-              </label>
-            )}
-
-            {/* Equipamentos */}
-            <label className={`${servicoEditando?.tipo_servico === "Job" ? "col-span-5" : "col-span-8"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
-              Valor Diária Equipamentos
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <CurrencyInput
-                    value={Number(servicoEditando?.valor_diaria_equipamentos) || 0}
-                    readOnly={!servicoEditando?.is_pacote}
-                    onChange={(val) => setServicoEditando((prev) => ({ ...prev, valor_diaria_equipamentos: val }))}
-                    className="w-full pr-10"
-                  />
-                  <button type="button" disabled={servicoEditando?.is_pacote} onClick={() => setModalEquipEditOpen(true)}
-                    title="Selecionar equipamentos"
-                    className={`absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded ${servicoEditando?.is_pacote ? "bg-neutral-300 text-neutral-400 cursor-not-allowed" : "bg-primary-600 hover:bg-primary-700 text-white"}`}>
-                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/>
-                    </svg>
-                  </button>
-                </div>
-                <label className="flex items-center gap-1.5 text-xs cursor-pointer whitespace-nowrap border border-neutral-300 rounded px-2 text-neutral-600">
-                  <input type="checkbox" checked={!!servicoEditando?.is_pacote}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setServicoEditando((prev) => ({ ...prev, is_pacote: checked, valor_diaria_equipamentos: checked ? prev.valor_diaria_equipamentos : 0, equipamentos: checked ? [] : prev.equipamentos }));
-                    }} />
-                  Pacote
-                </label>
-              </div>
-            </label>
-
-            {/* Totais */}
-            <label className="col-span-12 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Valor Total
-              <input type="text" readOnly className="w-full bg-neutral-50"
-                value={fmtBRL(((Number(servicoEditando?.valor_diaria_cache) || 0) + (Number(servicoEditando?.valor_diaria_equipamentos) || 0)) * ((servicoEditando?.datas?.length) || 1))} />
-            </label>
-            <label className="col-span-6 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Desconto
-              <CurrencyInput value={Number(servicoEditando?.valor_desconto) || 0} className="w-full"
-                onChange={(val) => setServicoEditando({ ...servicoEditando, valor_desconto: val })} />
-            </label>
-            <label className="col-span-6 md:col-span-5 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Valor Final
-              <input type="text" readOnly className="w-full bg-neutral-50"
-                value={fmtBRL(Math.max(0, ((Number(servicoEditando?.valor_diaria_cache) || 0) + (Number(servicoEditando?.valor_diaria_equipamentos) || 0)) * ((servicoEditando?.datas?.length) || 1) - (Number(servicoEditando?.valor_desconto) || 0)))} />
-            </label>
-
-            {/* Status */}
-            <label className="col-span-12 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Status
-              <select value={servicoEditando?.status || "pendente"} className="w-full"
-                onChange={(e) => setServicoEditando({ ...servicoEditando, status: e.target.value })}>
-                <option value="pendente">Pendente</option>
-                <option value="parcial">Parcial</option>
-                <option value="pago">Pago</option>
-              </select>
-            </label>
-
-            <div className="col-span-12 flex items-center justify-between pt-1">
-              <button
-                type="button"
-                onClick={() => setOrcamentoAberto(true)}
-                className="btn-secondary text-xs"
-              >
-                Ver Orçamento
-              </button>
-              <button onClick={salvarServico} className="btn-primary">Salvar Alterações</button>
-            </div>
-
-            {/* Modal de orçamento para edição */}
-            <ModalOrcamento
-              isOpen={orcamentoAberto}
-              onClose={() => setOrcamentoAberto(false)}
-              formData={{ ...servicoEditando, numero_diarias: (servicoEditando?.datas || []).length || 1 }}
-              clientes={clientes}
-            />
-          </div>
-        )}
-      </Modal>
-
-      {modalEquipOpen && (
-        <ModalEquipamentos isOpen={modalEquipOpen} onClose={() => setModalEquipOpen(false)}
-          onConfirm={handleConfirmarEquip} preSelecionados={formData.equipamentos} />
-      )}
-      {modalEquipEditOpen && (
-        <ModalEquipamentos isOpen={modalEquipEditOpen} onClose={() => setModalEquipEditOpen(false)}
-          onConfirm={handleConfirmarEquipEdit} preSelecionados={servicoEditando?.equipamentos || []} />
-      )}
+      {/* Modal único de criar/editar — mesmo componente do Calendário */}
+      <ModalServicoCalendario
+        isOpen={modalAberto}
+        servicoId={servicoModalId}
+        dataInicial={dataInicial}
+        onClose={fecharModal}
+        onSalvo={handleSalvo}
+      />
     </>
   );
 }
