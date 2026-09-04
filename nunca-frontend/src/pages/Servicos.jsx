@@ -9,6 +9,7 @@ import IconButton from "../components/IconButton";
 import SortTh from "../components/SortTh";
 import { useSortTable } from "../hooks/useSortTable";
 import ModalEquipamentos from "../components/servicos/ModalEquipamentos";
+import ModalOrcamento from "../components/servicos/ModalOrcamento";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 const MESES = [
@@ -74,6 +75,7 @@ export default function Servicos() {
   const [novaDataEdit, setNovaDataEdit] = useState("");
   const [modalEquipOpen, setModalEquipOpen] = useState(false);
   const [modalEquipEditOpen, setModalEquipEditOpen] = useState(false);
+  const [orcamentoAberto, setOrcamentoAberto] = useState(false);
 
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -463,14 +465,29 @@ export default function Servicos() {
               <DateInput value={formData.data_previsao_pagamento || ""}
                 onChange={(d) => setFormData((prev) => ({ ...prev, data_previsao_pagamento: d }))} />
             </label>
-            <div className="col-span-2 flex items-end">
+            <div className="col-span-2 flex flex-col items-end gap-1.5">
               <button type="submit" className="btn-primary w-full">
                 <Plus size={14} />
                 Salvar Serviço
               </button>
+              <button
+                type="button"
+                onClick={() => setOrcamentoAberto(true)}
+                className="btn-secondary w-full text-xs"
+              >
+                Ver Orçamento
+              </button>
             </div>
           </div>
         </form>
+
+        {/* Modal de orçamento */}
+        <ModalOrcamento
+          isOpen={orcamentoAberto}
+          onClose={() => setOrcamentoAberto(false)}
+          formData={{ ...formData, numero_diarias: formData.datas.length || 1 }}
+          clientes={clientes}
+        />
 
         {/* Filtros */}
         <div className="filter-bar">
