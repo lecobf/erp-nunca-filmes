@@ -16,6 +16,14 @@ export default function ModalOrcamento({ isOpen, onClose, formData, clientes = [
   const cliente = clientes.find((c) => c.id === Number(formData.cliente_id));
   const nomeCliente = cliente?.nome || "—";
 
+  // Suporta tanto datas[] (array de strings) quanto data_contratacao (string única)
+  const datasFormatadas = (() => {
+    if (Array.isArray(formData.datas) && formData.datas.length > 0) {
+      return [...formData.datas].sort().map(fmtDateBR).join(" | ");
+    }
+    return fmtDateBR(formData.data_contratacao) || "—";
+  })();
+
   const numeroDiarias = Number(formData.numero_diarias) || 1;
   const equipamentos = formData.equipamentos || [];
   const isJob = formData.tipo_servico !== "Aluguel";
@@ -132,8 +140,8 @@ export default function ModalOrcamento({ isOpen, onClose, formData, clientes = [
         <span class="info-value">${nomeCliente}</span>
       </div>
       <div class="info-item">
-        <span class="info-label">Data</span>
-        <span class="info-value">${fmtDateBR(formData.data_contratacao) || "—"}</span>
+        <span class="info-label">Data${datasFormatadas.includes("|") ? "s" : ""}</span>
+        <span class="info-value">${datasFormatadas}</span>
       </div>
       <div class="info-item">
         <span class="info-label">Tipo</span>
@@ -266,11 +274,11 @@ export default function ModalOrcamento({ isOpen, onClose, formData, clientes = [
                 <p className="text-[10px] text-neutral-400">Cliente</p>
                 <p className="text-sm font-medium text-neutral-800">{nomeCliente}</p>
               </div>
-              <div>
-                <p className="text-[10px] text-neutral-400">Data</p>
-                <p className="text-sm font-medium text-neutral-800">
-                  {fmtDateBR(formData.data_contratacao) || "—"}
+              <div className={datasFormatadas.includes("|") ? "col-span-2" : ""}>
+                <p className="text-[10px] text-neutral-400">
+                  {datasFormatadas.includes("|") ? "Datas" : "Data"}
                 </p>
+                <p className="text-sm font-medium text-neutral-800">{datasFormatadas}</p>
               </div>
               <div>
                 <p className="text-[10px] text-neutral-400">Tipo</p>
