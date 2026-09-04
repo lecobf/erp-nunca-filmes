@@ -3,10 +3,13 @@ import { api } from "../../api/config"; // ✅ substitui axios direto
 import DateInput from "../DateInput";
 import CurrencyInput from "../CurrencyInput";
 import CampoEquipamentos from "./CampoEquipamentos";
+import ModalOrcamento from "./ModalOrcamento";
 import { fmtBRL } from "../../utils/formatters";
 
 export default function FormServico({ clientes = [], onCreated }) {
   const dataHoje = new Date().toISOString().split("T")[0];
+
+  const [orcamentoAberto, setOrcamentoAberto] = useState(false);
 
   const [formData, setFormData] = useState({
     data_contratacao: dataHoje,
@@ -197,11 +200,28 @@ export default function FormServico({ clientes = [], onCreated }) {
         />
       </label>
 
-      <div className="md:col-span-6 flex justify-end mt-2">
+      <div className="md:col-span-6 flex justify-between items-center mt-2">
+        {/* Botão de visualizar orçamento — fica à esquerda */}
+        <button
+          type="button"
+          onClick={() => setOrcamentoAberto(true)}
+          className="btn-secondary"
+        >
+          Ver Orçamento
+        </button>
+
         <button type="submit" className="btn-primary">
           Adicionar Serviço
         </button>
       </div>
+
+      {/* Modal de orçamento */}
+      <ModalOrcamento
+        isOpen={orcamentoAberto}
+        onClose={() => setOrcamentoAberto(false)}
+        formData={formData}
+        clientes={clientes}
+      />
     </form>
   );
 }
