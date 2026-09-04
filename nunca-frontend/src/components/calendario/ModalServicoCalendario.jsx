@@ -6,6 +6,7 @@ import DateInput from "../DateInput";
 import { fmtBRL, fmtDateBR } from "../../utils/formatters";
 import { X, Trash2 } from "lucide-react";
 import ModalEquipamentos from "../servicos/ModalEquipamentos";
+import ModalOrcamento from "../servicos/ModalOrcamento";
 
 function DateChip({ date, onRemove }) {
   return (
@@ -54,6 +55,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
   const [form, setForm] = useState(formVazio(dataInicial));
   const [novaData, setNovaData] = useState("");
   const [modalEquipOpen, setModalEquipOpen] = useState(false);
+  const [orcamentoAberto, setOrcamentoAberto] = useState(false);
   const [carregando, setCarregando] = useState(false);
 
   useEffect(() => {
@@ -325,9 +327,14 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
                   Excluir
                 </button>
               ) : <span />}
-              <button type="button" onClick={salvar} className="btn-primary">
-                {modoEdicao ? "Salvar Alterações" : "Salvar Serviço"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setOrcamentoAberto(true)} className="btn-secondary text-xs">
+                  Ver Orçamento
+                </button>
+                <button type="button" onClick={salvar} className="btn-primary">
+                  {modoEdicao ? "Salvar Alterações" : "Salvar Serviço"}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -337,6 +344,13 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
         <ModalEquipamentos isOpen={modalEquipOpen} onClose={() => setModalEquipOpen(false)}
           onConfirm={handleConfirmarEquip} preSelecionados={form.equipamentos} />
       )}
+
+      <ModalOrcamento
+        isOpen={orcamentoAberto}
+        onClose={() => setOrcamentoAberto(false)}
+        formData={{ ...form, numero_diarias: (form.datas || []).length || 1 }}
+        clientes={clientes}
+      />
     </>
   );
 }

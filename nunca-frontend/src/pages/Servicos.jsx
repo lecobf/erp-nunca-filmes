@@ -748,9 +748,24 @@ export default function Servicos() {
               </select>
             </label>
 
-            <div className="col-span-12 flex justify-end pt-1">
+            <div className="col-span-12 flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => setOrcamentoAberto(true)}
+                className="btn-secondary text-xs"
+              >
+                Ver Orçamento
+              </button>
               <button onClick={salvarServico} className="btn-primary">Salvar Alterações</button>
             </div>
+
+            {/* Modal de orçamento para edição */}
+            <ModalOrcamento
+              isOpen={orcamentoAberto}
+              onClose={() => setOrcamentoAberto(false)}
+              formData={{ ...servicoEditando, numero_diarias: (servicoEditando?.datas || []).length || 1 }}
+              clientes={clientes}
+            />
           </div>
         )}
       </Modal>
