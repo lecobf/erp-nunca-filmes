@@ -11,11 +11,8 @@
  * Os servidores públicos têm limites de uso — em produção, hospedar Photon/OSRM
  * próprios ou contratar um provedor.
  */
-import { haversine } from "../utils/rotas/grafo";
-
 const PHOTON_URL = "https://photon.komoot.io/api/";
 const OSRM_URL = "https://router.project-osrm.org";
-const VELOCIDADE_FALLBACK_MS = 25 / 3.6; // 25 km/h médio urbano
 
 function formatarEndereco(p) {
   const rua = [p.street || p.name, p.housenumber].filter(Boolean).join(", ");
@@ -49,47 +46,48 @@ export async function buscarEnderecos(texto, { perto, signal } = {}) {
 
 const coordsOsrm = (pontos) => pontos.map(([lat, lon]) => `${lon},${lat}`).join(";");
 
-/**
- * Matriz de custos do grafo completo: durations[i][j] (s) e distances[i][j] (m).
- * Se o OSRM não responder, estima por linha reta a velocidade média.
- */
-export async function matrizDeCustos(pontos) {
+async function chamarOsrm(caminho) {
+  let data;
   try {
-    const res = await fetch(
-      `${OSRM_URL}/table/v1/driving/${coordsOsrm(pontos)}?annotations=duration,distance`
-    );
-    const data = await res.json();
-    if (data.code !== "Ok") throw new Error(data.message || data.code);
-    return { durations: data.durations, distances: data.distances, estimado: false };
+    const res = await fetch(`${OSRM_URL}${caminho}`);
+    data = await res.json();
   } catch {
-    const distances = pontos.map((a) => pontos.map((b) => haversine(a, b) * 1.3));
-    const durations = distances.map((linha) => linha.map((d) => d / VELOCIDADE_FALLBACK_MS));
-    return { durations, distances, estimado: true };
+    throw new Error("Serviço de rotas indisponível. Tente novamente em instantes.");
   }
+  if (data.code !== "Ok") throw new Error(`Serviço de rotas recusou a consulta: ${data.message || data.code}`);
+  return data;
 }
 
 /**
- * Trajeto pelas ruas passando pelos pontos na ordem dada.
+ * Matriz de adjacência do grafo dirigido: durations[i][j] (s) e distances[i][j] (m).
+ *
+ * O perfil "driving" do OSRM só percorre ruas no sentido permitido (mão/contramão,
+ * tags oneway do OpenStreetMap), então durations[i][j] ≠ durations[j][i] em geral.
+ * Quando não existe caminho respeitando o sentido das vias, o OSRM devolve null:
+ * aqui isso vira Infinity = aresta inexistente.
+ *
+ * Não há fallback por linha reta: ele ignoraria a mão das ruas e criaria
+ * arestas que não existem.
+ */
+export async function matrizDeCustos(pontos) {
+  const data = await chamarOsrm(
+    `/table/v1/driving/${coordsOsrm(pontos)}?annotations=duration,distance`
+  );
+  const semAresta = (m) => m.map((linha) => linha.map((v) => (v == null ? Infinity : v)));
+  return { durations: semAresta(data.durations), distances: semAresta(data.distances) };
+}
+
+/**
+ * Trajeto pelas ruas, respeitando a mão de direção, passando pelos pontos na ordem dada.
  * Retorna a linha a desenhar ([lat, lon][]) e duração/distância de cada trecho.
  */
 export async function tracarRota(pontos) {
-  try {
-    const res = await fetch(
-      `${OSRM_URL}/route/v1/driving/${coordsOsrm(pontos)}?overview=full&geometries=geojson`
-    );
-    const data = await res.json();
-    if (data.code !== "Ok") throw new Error(data.message || data.code);
-    const rota = data.routes[0];
-    return {
-      linha: rota.geometry.coordinates.map(([lon, lat]) => [lat, lon]),
-      trechos: rota.legs.map((l) => ({ duracao: l.duration, distancia: l.distance })),
-      estimado: false,
-    };
-  } catch {
-    const trechos = pontos.slice(1).map((p, i) => {
-      const distancia = haversine(pontos[i], p) * 1.3;
-      return { duracao: distancia / VELOCIDADE_FALLBACK_MS, distancia };
-    });
-    return { linha: pontos, trechos, estimado: true };
-  }
+  const data = await chamarOsrm(
+    `/route/v1/driving/${coordsOsrm(pontos)}?overview=full&geometries=geojson`
+  );
+  const rota = data.routes[0];
+  return {
+    linha: rota.geometry.coordinates.map(([lon, lat]) => [lat, lon]),
+    trechos: rota.legs.map((l) => ({ duracao: l.duration, distancia: l.distance })),
+  };
 }

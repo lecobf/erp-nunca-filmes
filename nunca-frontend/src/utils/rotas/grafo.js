@@ -3,12 +3,13 @@
  *
  * Modelo:
  *  - Cada endereço é um VÉRTICE.
- *  - Entre todo par de vértices existe uma ARESTA dirigida cujo peso é o tempo
- *    de viagem pelas ruas (matriz de custos vinda do OSRM, que internamente roda
- *    um algoritmo de caminho mínimo — Dijkstra/Contraction Hierarchies — sobre o
- *    grafo viário do OpenStreetMap).
- *  - O grafo resultante é completo e assimétrico (ida ≠ volta por causa de
- *    mão única).
+ *  - Existe uma ARESTA dirigida u → v somente se há caminho de carro de u até v
+ *    respeitando a mão de direção das ruas. O peso é o tempo desse caminho
+ *    (matriz de custos vinda do OSRM, que roda caminho mínimo — Dijkstra/
+ *    Contraction Hierarchies — sobre o grafo viário dirigido do OpenStreetMap).
+ *  - O grafo é dirigido e assimétrico: ida ≠ volta por causa das mãos únicas.
+ *    Ausência de aresta = peso Infinity; nenhum algoritmo abaixo usa uma
+ *    aresta inexistente.
  *
  * Problema: encontrar a ordem de visita de menor custo total que parte do
  * primeiro endereço e passa por todos os outros exatamente uma vez
@@ -30,11 +31,11 @@ export function custoRota(matriz, ordem, voltarAoInicio = false) {
 
 /**
  * Held-Karp: dp[mask][j] = menor custo saindo de 0, visitando exatamente os
- * vértices de `mask` e terminando em j.
+ * vértices de `mask` e terminando em j. Retorna null se não houver roteiro viável.
  */
 export function heldKarp(matriz, voltarAoInicio = false) {
   const n = matriz.length;
-  if (n <= 2) return [...Array(n).keys()];
+  if (n <= 2) return custoRota(matriz, [...Array(n).keys()], voltarAoInicio) < Infinity ? [...Array(n).keys()] : null;
 
   const total = 1 << n;
   const dp = Array.from({ length: total }, () => new Float64Array(n).fill(Infinity));
@@ -68,6 +69,8 @@ export function heldKarp(matriz, voltarAoInicio = false) {
       fim = j;
     }
   }
+
+  if (melhor === Infinity) return null;
 
   const ordem = [];
   let mask = cheio;
@@ -127,22 +130,30 @@ export function doisOpt(matriz, ordemInicial, voltarAoInicio = false) {
 
 /**
  * Ponto de entrada: devolve a ordem de visita (índices da matriz, começando em 0)
- * e o algoritmo usado.
+ * e o algoritmo usado. `ordem` é null quando não existe roteiro que passe por
+ * todos os vértices usando apenas arestas existentes.
  */
 export function menorRoteiro(matriz, { voltarAoInicio = false } = {}) {
   const n = matriz.length;
-  if (n <= 2) return { ordem: [...Array(n).keys()], algoritmo: "trivial" };
   if (n <= LIMITE_EXATO) return { ordem: heldKarp(matriz, voltarAoInicio), algoritmo: "Held-Karp (ótimo)" };
-  const inicial = vizinhoMaisProximo(matriz);
-  return { ordem: doisOpt(matriz, inicial, voltarAoInicio), algoritmo: "Vizinho mais próximo + 2-opt" };
+  const ordem = doisOpt(matriz, vizinhoMaisProximo(matriz), voltarAoInicio);
+  const viavel = custoRota(matriz, ordem, voltarAoInicio) < Infinity;
+  return { ordem: viavel ? ordem : null, algoritmo: "Vizinho mais próximo + 2-opt" };
 }
 
-/** Distância em linha reta (metros) — usada como fallback se o roteador falhar. */
-export function haversine([lat1, lon1], [lat2, lon2]) {
-  const R = 6371000;
-  const rad = (g) => (g * Math.PI) / 180;
-  const dLat = rad(lat2 - lat1);
-  const dLon = rad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
+/** Vértices sem aresta de entrada ou de saída (inalcançáveis pela mão das ruas). */
+export function verticesIsolados(matriz) {
+  const n = matriz.length;
+  const isolados = [];
+  for (let v = 0; v < n; v++) {
+    let entra = false;
+    let sai = false;
+    for (let u = 0; u < n; u++) {
+      if (u === v) continue;
+      if (matriz[u][v] < Infinity) entra = true;
+      if (matriz[v][u] < Infinity) sai = true;
+    }
+    if (!entra || !sai) isolados.push(v);
+  }
+  return isolados;
 }

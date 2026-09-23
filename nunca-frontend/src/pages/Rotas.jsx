@@ -4,7 +4,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Trash2, Flag, Loader2, MapPin, AlertTriangle } from "lucide-react";
 import { buscarEnderecos, matrizDeCustos, tracarRota } from "../services/rotasApi";
-import { menorRoteiro } from "../utils/rotas/grafo";
+import { menorRoteiro, verticesIsolados } from "../utils/rotas/grafo";
 
 const STORAGE_KEY = "rotas.pontos";
 const CENTRO_PADRAO = [-23.5505, -46.6333]; // São Paulo
@@ -154,6 +154,7 @@ export default function Rotas() {
   const [voltar, setVoltar] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
+  const [erroRota, setErroRota] = useState("");
   const idSeq = useRef(Date.now());
 
   useEffect(() => {
@@ -168,19 +169,34 @@ export default function Rotas() {
   useEffect(() => {
     if (pontos.length < 2) {
       setResultado(null);
+      setErroRota("");
       setCalculando(false);
       return;
     }
     let cancelado = false;
     (async () => {
       setCalculando(true);
-      const coords = pontos.map((p) => p.coords);
-      const matriz = await matrizDeCustos(coords);
-      const { ordem, algoritmo } = menorRoteiro(matriz.durations, { voltarAoInicio: voltar });
-      const sequencia = voltar ? [...ordem, 0] : ordem;
-      const trajeto = await tracarRota(sequencia.map((i) => coords[i]));
-      if (cancelado) return;
-      setResultado({ pontos, ordem, sequencia, algoritmo, ...trajeto, estimado: matriz.estimado || trajeto.estimado });
+      setErroRota("");
+      try {
+        const coords = pontos.map((p) => p.coords);
+        const matriz = await matrizDeCustos(coords);
+        const { ordem, algoritmo } = menorRoteiro(matriz.durations, { voltarAoInicio: voltar });
+        if (!ordem) {
+          const isolados = verticesIsolados(matriz.durations).map((i) => pontos[i].endereco);
+          throw new Error(
+            "Não existe roteiro que passe por todos os endereços respeitando a mão das ruas" +
+              (isolados.length ? `. Sem acesso de/para: ${isolados.join("; ")}` : ".")
+          );
+        }
+        const sequencia = voltar ? [...ordem, 0] : ordem;
+        const trajeto = await tracarRota(sequencia.map((i) => coords[i]));
+        if (cancelado) return;
+        setResultado({ pontos, ordem, sequencia, algoritmo, ...trajeto });
+      } catch (e) {
+        if (cancelado) return;
+        setResultado(null);
+        setErroRota(e.message);
+      }
       setCalculando(false);
     })();
     return () => {
@@ -284,16 +300,16 @@ export default function Rotas() {
             {rota && (
               <Polyline
                 positions={rota.linha}
-                pathOptions={{ color: "#2563eb", weight: 5, opacity: 0.8, dashArray: rota.estimado ? "8 8" : null }}
+                pathOptions={{ color: "#2563eb", weight: 5, opacity: 0.8 }}
               />
             )}
           </MapContainer>
         </div>
 
-        {rota?.estimado && (
-          <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+        {erroRota && (
+          <div className="flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
             <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-            Serviço de rotas indisponível: tempos estimados por distância em linha reta (linha tracejada).
+            {erroRota}
           </div>
         )}
 
