@@ -2,17 +2,18 @@
  * Provedores externos do módulo de Rotas (gratuitos, sem chave de API):
  *
  *  - Photon (komoot) — geocodificação com autocomplete sobre dados OpenStreetMap
- *  - OSRM            — matriz de tempos/distâncias e geometria do trajeto
+ *  - Valhalla (FOSSGIS) — matriz de tempos/distâncias e geometria do trajeto,
+ *                        otimizando por menor tempo ou por menor distância
  *
  * O Waze não oferece API pública de geocodificação/roteamento. Para trânsito em
  * tempo real, basta trocar as funções abaixo por Google Maps, Mapbox, TomTom ou
  * HERE mantendo o mesmo formato de retorno.
  *
- * Os servidores públicos têm limites de uso — em produção, hospedar Photon/OSRM
+ * Os servidores públicos têm limites de uso — em produção, hospedar Photon/Valhalla
  * próprios ou contratar um provedor.
  */
 const PHOTON_URL = "https://photon.komoot.io/api/";
-const OSRM_URL = "https://router.project-osrm.org";
+const VALHALLA_URL = "https://valhalla1.openstreetmap.de";
 
 function formatarEndereco(p) {
   const rua = [p.street || p.name, p.housenumber].filter(Boolean).join(", ");
@@ -44,50 +45,99 @@ export async function buscarEnderecos(texto, { perto, signal } = {}) {
   }));
 }
 
-const coordsOsrm = (pontos) => pontos.map(([lat, lon]) => `${lon},${lat}`).join(";");
+/**
+ * Critério de custo das arestas:
+ *  - "tempo":     caminho mais rápido entre dois endereços
+ *  - "distancia": caminho mais curto em km (costing "shortest" do Valhalla)
+ * Em ambos o perfil "auto" só percorre ruas no sentido permitido (ignore_oneways
+ * fica desligado), então a mão de direção é sempre respeitada.
+ */
+function parametrosCusto(criterio) {
+  return {
+    costing: "auto",
+    costing_options: { auto: criterio === "distancia" ? { shortest: true } : {} },
+  };
+}
 
-async function chamarOsrm(caminho) {
+const locais = (pontos) => pontos.map(([lat, lon]) => ({ lat, lon }));
+
+async function chamarValhalla(endpoint, corpo) {
+  let res;
   let data;
   try {
-    const res = await fetch(`${OSRM_URL}${caminho}`);
+    res = await fetch(`${VALHALLA_URL}/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+    });
     data = await res.json();
   } catch {
     throw new Error("Serviço de rotas indisponível. Tente novamente em instantes.");
   }
-  if (data.code !== "Ok") throw new Error(`Serviço de rotas recusou a consulta: ${data.message || data.code}`);
+  if (!res.ok || data.error) throw new Error(`Serviço de rotas recusou a consulta: ${data.error || res.status}`);
   return data;
 }
 
+/** Decodifica polyline com precisão 6 (formato do Valhalla) em [lat, lon][]. */
+function decodificarPolyline6(str) {
+  const coords = [];
+  let i = 0;
+  let lat = 0;
+  let lon = 0;
+  const proximo = () => {
+    let resultado = 0;
+    let shift = 0;
+    let b;
+    do {
+      b = str.charCodeAt(i++) - 63;
+      resultado |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    return resultado & 1 ? ~(resultado >> 1) : resultado >> 1;
+  };
+  while (i < str.length) {
+    lat += proximo();
+    lon += proximo();
+    coords.push([lat / 1e6, lon / 1e6]);
+  }
+  return coords;
+}
+
 /**
- * Matriz de adjacência do grafo dirigido: durations[i][j] (s) e distances[i][j] (m).
- *
- * O perfil "driving" do OSRM só percorre ruas no sentido permitido (mão/contramão,
- * tags oneway do OpenStreetMap), então durations[i][j] ≠ durations[j][i] em geral.
- * Quando não existe caminho respeitando o sentido das vias, o OSRM devolve null:
- * aqui isso vira Infinity = aresta inexistente.
+ * Matriz de adjacência do grafo dirigido: durations[i][j] (s) e distances[i][j] (m)
+ * do melhor caminho de i até j segundo o critério escolhido. Em geral
+ * [i][j] ≠ [j][i] por causa das mãos únicas.
+ * Sem caminho respeitando o sentido das vias → Infinity = aresta inexistente.
  *
  * Não há fallback por linha reta: ele ignoraria a mão das ruas e criaria
  * arestas que não existem.
  */
-export async function matrizDeCustos(pontos) {
-  const data = await chamarOsrm(
-    `/table/v1/driving/${coordsOsrm(pontos)}?annotations=duration,distance`
-  );
-  const semAresta = (m) => m.map((linha) => linha.map((v) => (v == null ? Infinity : v)));
-  return { durations: semAresta(data.durations), distances: semAresta(data.distances) };
+export async function matrizDeCustos(pontos, criterio = "tempo") {
+  const data = await chamarValhalla("sources_to_targets", {
+    sources: locais(pontos),
+    targets: locais(pontos),
+    ...parametrosCusto(criterio),
+  });
+  const valor = (v, fator = 1) => (v == null ? Infinity : v * fator);
+  return {
+    durations: data.sources_to_targets.map((linha) => linha.map((c) => valor(c.time))),
+    distances: data.sources_to_targets.map((linha) => linha.map((c) => valor(c.distance, 1000))), // km → m
+  };
 }
 
 /**
  * Trajeto pelas ruas, respeitando a mão de direção, passando pelos pontos na ordem dada.
  * Retorna a linha a desenhar ([lat, lon][]) e duração/distância de cada trecho.
  */
-export async function tracarRota(pontos) {
-  const data = await chamarOsrm(
-    `/route/v1/driving/${coordsOsrm(pontos)}?overview=full&geometries=geojson`
-  );
-  const rota = data.routes[0];
+export async function tracarRota(pontos, criterio = "tempo") {
+  const data = await chamarValhalla("route", {
+    locations: locais(pontos).map((l) => ({ ...l, type: "break" })),
+    ...parametrosCusto(criterio),
+    directions_type: "none",
+  });
+  const legs = data.trip.legs;
   return {
-    linha: rota.geometry.coordinates.map(([lon, lat]) => [lat, lon]),
-    trechos: rota.legs.map((l) => ({ duracao: l.duration, distancia: l.distance })),
+    linha: legs.flatMap((l) => decodificarPolyline6(l.shape)),
+    trechos: legs.map((l) => ({ duracao: l.summary.time, distancia: l.summary.length * 1000 })),
   };
 }

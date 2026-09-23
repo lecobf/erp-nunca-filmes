@@ -152,6 +152,7 @@ export default function Rotas() {
   const [horaSaida, setHoraSaida] = useState(horaAtual);
   const [paradaMin, setParadaMin] = useState(0);
   const [voltar, setVoltar] = useState(false);
+  const [criterio, setCriterio] = useState("tempo"); // "tempo" | "distancia"
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [erroRota, setErroRota] = useState("");
@@ -179,19 +180,20 @@ export default function Rotas() {
       setErroRota("");
       try {
         const coords = pontos.map((p) => p.coords);
-        const matriz = await matrizDeCustos(coords);
-        const { ordem, algoritmo } = menorRoteiro(matriz.durations, { voltarAoInicio: voltar });
+        const matriz = await matrizDeCustos(coords, criterio);
+        const pesos = criterio === "distancia" ? matriz.distances : matriz.durations;
+        const { ordem, algoritmo } = menorRoteiro(pesos, { voltarAoInicio: voltar });
         if (!ordem) {
-          const isolados = verticesIsolados(matriz.durations).map((i) => pontos[i].endereco);
+          const isolados = verticesIsolados(pesos).map((i) => pontos[i].endereco);
           throw new Error(
             "Não existe roteiro que passe por todos os endereços respeitando a mão das ruas" +
               (isolados.length ? `. Sem acesso de/para: ${isolados.join("; ")}` : ".")
           );
         }
         const sequencia = voltar ? [...ordem, 0] : ordem;
-        const trajeto = await tracarRota(sequencia.map((i) => coords[i]));
+        const trajeto = await tracarRota(sequencia.map((i) => coords[i]), criterio);
         if (cancelado) return;
-        setResultado({ pontos, ordem, sequencia, algoritmo, ...trajeto });
+        setResultado({ pontos, criterio, ordem, sequencia, algoritmo, ...trajeto });
       } catch (e) {
         if (cancelado) return;
         setResultado(null);
@@ -202,10 +204,10 @@ export default function Rotas() {
     return () => {
       cancelado = true;
     };
-  }, [pontos, voltar]);
+  }, [pontos, voltar, criterio]);
 
   // descarta resultado calculado para uma lista de pontos que já mudou
-  const rota = resultado?.pontos === pontos ? resultado : null;
+  const rota = resultado?.pontos === pontos && resultado.criterio === criterio ? resultado : null;
 
   // Horário estimado de chegada em cada parada
   const itinerario = useMemo(() => {
@@ -274,6 +276,26 @@ export default function Rotas() {
                 className="w-28"
               />
             </label>
+            <div className="flex flex-col gap-1">
+              Otimizar por
+              <div className="inline-flex rounded border border-neutral-300 overflow-hidden">
+                {[
+                  ["tempo", "Menor tempo"],
+                  ["distancia", "Menor distância (km)"],
+                ].map(([valor, rotulo]) => (
+                  <button
+                    key={valor}
+                    type="button"
+                    onClick={() => setCriterio(valor)}
+                    className={`px-3 py-1.5 text-xs ${
+                      criterio === valor ? "bg-primary-600 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+            </div>
             <label className="flex items-center gap-2 pb-1.5">
               <input type="checkbox" checked={voltar} onChange={(e) => setVoltar(e.target.checked)} />
               Voltar ao ponto de partida
@@ -320,7 +342,8 @@ export default function Rotas() {
               {calculando && <Loader2 size={14} className="animate-spin" />}
               {rota && total && (
                 <span>
-                  {fmtKm(total.m)} · {fmtDuracao(total.d)} dirigindo · {rota.algoritmo}
+                  {fmtKm(total.m)} · {fmtDuracao(total.d)} dirigindo · menor{" "}
+                  {rota.criterio === "distancia" ? "distância" : "tempo"} · {rota.algoritmo}
                 </span>
               )}
             </div>

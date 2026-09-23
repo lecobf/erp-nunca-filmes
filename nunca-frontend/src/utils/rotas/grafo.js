@@ -4,9 +4,10 @@
  * Modelo:
  *  - Cada endereço é um VÉRTICE.
  *  - Existe uma ARESTA dirigida u → v somente se há caminho de carro de u até v
- *    respeitando a mão de direção das ruas. O peso é o tempo desse caminho
- *    (matriz de custos vinda do OSRM, que roda caminho mínimo — Dijkstra/
- *    Contraction Hierarchies — sobre o grafo viário dirigido do OpenStreetMap).
+ *    respeitando a mão de direção das ruas. O peso é o custo do menor caminho
+ *    de u até v — em segundos ou em metros, conforme o critério escolhido —
+ *    calculado pelo roteador (Valhalla) sobre o grafo viário dirigido do
+ *    OpenStreetMap. Os demais caminhos entre u e v são dominados por esse.
  *  - O grafo é dirigido e assimétrico: ida ≠ volta por causa das mãos únicas.
  *    Ausência de aresta = peso Infinity; nenhum algoritmo abaixo usa uma
  *    aresta inexistente.
