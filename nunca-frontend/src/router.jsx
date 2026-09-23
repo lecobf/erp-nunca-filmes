@@ -8,6 +8,7 @@ import Pagamentos from "./pages/Pagamentos";
 import Equipamentos from "./pages/Equipamentos";
 import Calendario from "./pages/Calendario";
 import Usuarios from "./pages/Usuarios";
+import Rotas from "./pages/Rotas";
 import Login from "./pages/Login";
 
 const ADMIN_EMAIL = "admin@nuncafilmes.com";
@@ -47,6 +48,7 @@ export const router = createBrowserRouter([
       { path: "pagamentos", element: <Pagamentos /> },
       { path: "equipamentos", element: <Equipamentos /> },
       { path: "calendario", element: <Calendario /> },
+      { path: "rotas", element: <Rotas /> },
       {
         path: "usuarios",
         element: (

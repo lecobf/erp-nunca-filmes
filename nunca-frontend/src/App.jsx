@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "./api/config";
 import {
   LayoutDashboard, Briefcase, Users, DollarSign,
-  TrendingDown, Camera, Calendar, Settings, LogOut, X, ShieldCheck,
+  TrendingDown, Camera, Calendar, Settings, LogOut, X, ShieldCheck, Route,
 } from "lucide-react";
 
 const ADMIN_EMAIL = "admin@nuncafilmes.com";
@@ -15,6 +15,7 @@ const BASE_NAV_ITEMS = [
   { to: "/custos",       label: "Custos",       icon: TrendingDown },
   { to: "/pagamentos",   label: "Pagamentos",   icon: DollarSign },
   { to: "/equipamentos", label: "Equipamentos", icon: Camera },
+  { to: "/rotas",        label: "Rotas",        icon: Route },
   { to: "/dashboard",    label: "Dashboard",    icon: LayoutDashboard },
 ];
 
