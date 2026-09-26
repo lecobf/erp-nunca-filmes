@@ -47,8 +47,8 @@ def _segundos(duracao: Optional[str]) -> float:
 
 
 def _chamar_google(url: str, corpo: dict, campos: str):
-    chave = os.getenv("GOOGLE_MAPS_API_KEY")
-    if not chave:
+    chave = (os.getenv("GOOGLE_MAPS_API_KEY") or "").strip()
+    if not chave or chave.startswith("COLE_AQUI"):  # placeholder do CONFIGURAR_GOOGLE_MAPS.bat
         raise HTTPException(status_code=503, detail="GOOGLE_MAPS_API_KEY não configurada no servidor.")
     try:
         res = requests.post(

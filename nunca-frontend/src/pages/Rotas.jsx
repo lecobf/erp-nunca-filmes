@@ -6,8 +6,10 @@ import { menorRoteiro, verticesIsolados } from "../utils/rotas/grafo";
 
 // Chave de navegador (restrita por domínio no Google Cloud) e Map ID, em
 // nunca-frontend/.env.<modo>.local — arquivos fora do git.
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-const GOOGLE_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID";
+// (criados por CONFIGURAR_GOOGLE_MAPS.bat; "COLE_AQUI_..." = ainda não preenchido)
+const valorEnv = (v) => (v && !v.startsWith("COLE_AQUI") ? v.trim() : undefined);
+const GOOGLE_MAPS_KEY = valorEnv(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
+const GOOGLE_MAP_ID = valorEnv(import.meta.env.VITE_GOOGLE_MAPS_MAP_ID) || "DEMO_MAP_ID";
 
 const STORAGE_KEY = "rotas.pontos";
 const CENTRO_PADRAO = [-30.0346, -51.2177]; // Porto Alegre
@@ -210,9 +212,9 @@ export default function Rotas() {
           <div className="card p-4 text-xs text-neutral-600 space-y-1">
             <p className="font-semibold text-neutral-800">Google Maps não configurado.</p>
             <p>
-              Defina <code>VITE_GOOGLE_MAPS_API_KEY</code> (e opcionalmente <code>VITE_GOOGLE_MAPS_MAP_ID</code>) em{" "}
-              <code>nunca-frontend/.env.devlocal.local</code> ou <code>.env.production.local</code> e reinicie o
-              frontend.
+              Rode <code>CONFIGURAR_GOOGLE_MAPS.bat</code> na pasta do projeto, preencha{" "}
+              <code>VITE_GOOGLE_MAPS_API_KEY</code> em <code>nunca-frontend/.env.devlocal.local</code> (em produção:{" "}
+              <code>.env.production.local</code>) e reinicie o frontend.
             </p>
           </div>
         </div>
