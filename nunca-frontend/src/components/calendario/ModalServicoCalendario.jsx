@@ -53,6 +53,8 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
   const [clientes, setClientes] = useState([]);
   const [form, setForm] = useState(formVazio(dataInicial));
   const [novaData, setNovaData] = useState("");
+  const [periodoInicio, setPeriodoInicio] = useState("");
+  const [periodoFim, setPeriodoFim] = useState("");
   const [modalEquipOpen, setModalEquipOpen] = useState(false);
   const [carregando, setCarregando] = useState(false);
 
@@ -64,6 +66,8 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
   useEffect(() => {
     if (!isOpen) return;
     setNovaData("");
+    setPeriodoInicio("");
+    setPeriodoFim("");
     if (modoEdicao) {
       setCarregando(true);
       api.get(`/servicos/${servicoId}`)
@@ -118,6 +122,34 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
 
   function removerData(d) {
     setForm((prev) => ({ ...prev, datas: (prev.datas || []).filter((x) => x !== d) }));
+  }
+
+  // Gera todas as datas entre início e fim (inclusive), usando meio-dia para evitar problemas de DST
+  function datasNoPeriodo(inicio, fim) {
+    const lista = [];
+    const cur = new Date(inicio + "T12:00:00");
+    const end = new Date(fim + "T12:00:00");
+    while (cur <= end) {
+      lista.push(cur.toISOString().split("T")[0]);
+      cur.setDate(cur.getDate() + 1);
+    }
+    return lista;
+  }
+
+  function adicionarPeriodo() {
+    if (!periodoInicio || !periodoFim) return;
+    if (periodoFim < periodoInicio) {
+      alert("A data final deve ser igual ou posterior à data inicial.");
+      return;
+    }
+    const novas = datasNoPeriodo(periodoInicio, periodoFim);
+    setForm((prev) => {
+      const existentes = new Set(prev.datas || []);
+      novas.forEach((d) => existentes.add(d));
+      return { ...prev, datas: [...existentes].sort() };
+    });
+    setPeriodoInicio("");
+    setPeriodoFim("");
   }
 
   function calcTotalEquip(lista) {
@@ -225,15 +257,45 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
               </select>
             </label>
 
-            <div className="col-span-12 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            <div className="col-span-12 flex flex-col gap-2 text-xs font-medium text-neutral-600">
               Datas de Trabalho *
+
+              {/* Seleção por período */}
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-0.5">
+                  De
+                  <DateInput
+                    value={periodoInicio}
+                    onChange={setPeriodoInicio}
+                    className="min-w-[130px]"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  Até
+                  <DateInput
+                    value={periodoFim}
+                    onChange={setPeriodoFim}
+                    className="min-w-[130px]"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={adicionarPeriodo}
+                  disabled={!periodoInicio || !periodoFim}
+                  className="btn-secondary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-40"
+                >
+                  + Adicionar período
+                </button>
+              </div>
+
+              {/* Chips de datas selecionadas + campo de data avulsa */}
               <div className="flex flex-wrap items-center gap-1.5 min-h-[34px] border border-neutral-300 rounded px-2 py-1.5 bg-white">
                 {(form.datas || []).map((d) => (
                   <DateChip key={d} date={d} onRemove={removerData} />
                 ))}
                 <DateInput
                   value={novaData}
-                  placeholder="+ adicionar data"
+                  placeholder="+ data avulsa"
                   className="min-w-[130px] border-dashed text-neutral-400"
                   onChange={(d) => { if (d) adicionarData(d); setNovaData(""); }}
                 />
