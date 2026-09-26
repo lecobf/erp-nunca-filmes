@@ -7,7 +7,7 @@ import { buscarEnderecos, matrizDeCustos, tracarRota } from "../services/rotasAp
 import { menorRoteiro, verticesIsolados } from "../utils/rotas/grafo";
 
 const STORAGE_KEY = "rotas.pontos";
-const CENTRO_PADRAO = [-23.5505, -46.6333]; // São Paulo
+const CENTRO_PADRAO = [-30.0346, -51.2177]; // Porto Alegre
 
 function lerPontosSalvos() {
   try {
@@ -44,8 +44,12 @@ function iconeNumerado(rotulo, partida) {
 /* ── Enquadra o mapa nos pontos ───────────────────────────── */
 function AjustarMapa({ pontos }) {
   const map = useMap();
+  const qtdAnterior = useRef(-1);
   useEffect(() => {
-    if (pontos.length === 1) map.setView(pontos[0], 15);
+    // só reenquadra quando entra/sai ponto; arrastar um marcador não mexe no zoom
+    if (pontos.length === qtdAnterior.current) return;
+    qtdAnterior.current = pontos.length;
+    if (pontos.length === 1) map.setView(pontos[0], 16);
     else if (pontos.length > 1) map.fitBounds(pontos, { padding: [40, 40] });
   }, [map, pontos]);
   return null;
@@ -135,7 +139,14 @@ function BuscaEndereco({ perto, onSelecionar }) {
                 }`}
               >
                 <MapPin size={13} className="mt-0.5 shrink-0 text-neutral-400" />
-                <span>{s.endereco}</span>
+                <span>
+                  {s.endereco}
+                  {s.aproximado && (
+                    <span className="block text-[11px] text-amber-600">
+                      Número não cadastrado no mapa — posição aproximada, ajuste arrastando o marcador
+                    </span>
+                  )}
+                </span>
               </button>
             </li>
           ))}
@@ -237,8 +248,10 @@ export default function Rotas() {
   const total = rota?.trechos.reduce((acc, t) => ({ d: acc.d + t.duracao, m: acc.m + t.distancia }), { d: 0, m: 0 });
 
   function adicionar(s) {
-    setPontos((ps) => [...ps, { id: ++idSeq.current, endereco: s.endereco, coords: s.coords }]);
+    setPontos((ps) => [...ps, { id: ++idSeq.current, endereco: s.endereco, coords: s.coords, aproximado: s.aproximado }]);
   }
+  const mover = (id, coords) =>
+    setPontos((ps) => ps.map((p) => (p.id === id ? { ...p, coords, aproximado: false } : p)));
   const remover = (id) => setPontos((ps) => ps.filter((p) => p.id !== id));
   const definirPartida = (id) =>
     setPontos((ps) => [ps.find((p) => p.id === id), ...ps.filter((p) => p.id !== id)]);
@@ -315,6 +328,13 @@ export default function Rotas() {
                 key={p.id}
                 position={p.coords}
                 icon={iconeNumerado(posicaoNaRota[i] !== undefined ? posicaoNaRota[i] + 1 : i + 1, i === 0)}
+                draggable
+                eventHandlers={{
+                  dragend: (e) => {
+                    const { lat, lng } = e.target.getLatLng();
+                    mover(p.id, [lat, lng]);
+                  },
+                }}
               >
                 <Popup>{p.endereco}</Popup>
               </Marker>
@@ -378,6 +398,14 @@ export default function Rotas() {
                       )}
                       {retorno && <span className="mr-1.5 text-neutral-400">Retorno:</span>}
                       {ponto.endereco}
+                      {ponto.aproximado && !retorno && (
+                        <span
+                          title="Número não cadastrado no mapa. Arraste o marcador até a porta para corrigir."
+                          className="ml-1.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold"
+                        >
+                          APROXIMADO
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right text-neutral-500 whitespace-nowrap">
                       {trecho ? `${fmtKm(trecho.distancia)} · ${fmtDuracao(trecho.duracao)}` : "—"}

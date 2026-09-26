@@ -28,9 +28,10 @@ function formatarEndereco(p) {
   return [...new Set(partes)].join(" - ");
 }
 
-/** Sugestões de endereço para o autocomplete. */
-export async function buscarEnderecos(texto, { perto, signal } = {}) {
-  const params = new URLSearchParams({ q: texto, limit: "6" });
+const BBOX_BRASIL = "-74.1,-33.9,-34.7,5.4"; // lon mín, lat mín, lon máx, lat máx
+
+async function consultarPhoton(q, perto, signal) {
+  const params = new URLSearchParams({ q, limit: "8", bbox: BBOX_BRASIL });
   if (perto) {
     params.set("lat", String(perto[0]));
     params.set("lon", String(perto[1]));
@@ -38,11 +39,49 @@ export async function buscarEnderecos(texto, { perto, signal } = {}) {
   const res = await fetch(`${PHOTON_URL}?${params}`, { signal });
   if (!res.ok) throw new Error(`Geocodificação falhou (${res.status})`);
   const data = await res.json();
-  return (data.features || []).map((f) => ({
+  return data.features || [];
+}
+
+/** "Rua X, 155" → { rua: "Rua X", numero: "155" } */
+function separarNumero(texto) {
+  const m = texto.match(/^(.*\D)[\s,]+(\d{1,6})\s*$/);
+  return m ? { rua: m[1].replace(/[\s,]+$/, ""), numero: m[2] } : { rua: texto, numero: null };
+}
+
+const distancia2 = ([a, b], [c, d]) => (a - c) ** 2 + ((b - d) * Math.cos((a * Math.PI) / 180)) ** 2;
+
+/**
+ * Sugestões de endereço para o autocomplete.
+ *
+ * No Brasil o OpenStreetMap muitas vezes não tem o número das casas. Quando o
+ * texto termina em número, além da busca exata também buscamos só a rua e
+ * oferecemos cada trecho dela com o número digitado, marcado como `aproximado`
+ * (o usuário ajusta arrastando o marcador no mapa). Resultados ordenados pela
+ * proximidade de `perto`.
+ */
+export async function buscarEnderecos(texto, { perto, signal } = {}) {
+  const { rua, numero } = separarNumero(texto);
+  const [exatos, ruas] = await Promise.all([
+    consultarPhoton(texto, perto, signal),
+    numero ? consultarPhoton(rua, perto, signal) : Promise.resolve([]),
+  ]);
+
+  const converter = (f, extra = {}) => ({
     id: `${f.properties.osm_type}${f.properties.osm_id}`,
-    endereco: formatarEndereco(f.properties),
+    endereco: formatarEndereco({ ...f.properties, ...extra }),
     coords: [f.geometry.coordinates[1], f.geometry.coordinates[0]], // [lat, lon]
-  }));
+    aproximado: Boolean(extra.housenumber),
+  });
+
+  if (!numero) return exatos.map((f) => converter(f));
+
+  const sugestoes = [
+    ...exatos.filter((f) => String(f.properties.housenumber || "").startsWith(numero)).map((f) => converter(f)),
+    ...ruas.filter((f) => f.properties.type === "street").map((f) => converter(f, { housenumber: numero })),
+  ];
+  const unicas = [...new Map(sugestoes.map((s) => [s.endereco, s])).values()];
+  if (perto) unicas.sort((x, y) => distancia2(x.coords, perto) - distancia2(y.coords, perto));
+  return unicas.slice(0, 8);
 }
 
 /**
