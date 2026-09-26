@@ -33,6 +33,7 @@ class ServicoCreate(BaseModel):
     data_previsao_pagamento: Optional[datetime.date] = None
     status: str = "pendente"
     is_pacote: bool = False
+    tipo_cobranca: str = "diaria"  # "diaria" ou "periodo"
 
     equipamentos: Optional[List[ServicoEquipamentoIn]] = None
 
@@ -54,6 +55,7 @@ class ServicoOut(BaseModel):
     status: str
     valor_pendente_atual: float
     is_pacote: bool
+    tipo_cobranca: str
 
     servico_equipamentos: List[ServicoEquipamentoOut] = []
 

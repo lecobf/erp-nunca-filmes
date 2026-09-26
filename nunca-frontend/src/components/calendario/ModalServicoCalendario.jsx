@@ -34,6 +34,7 @@ const formVazio = (dataInicial) => ({
   status: "pendente",
   equipamentos: [],
   is_pacote: false,
+  tipo_cobranca: "diaria",  // "diaria" ou "periodo"
 });
 
 /**
@@ -89,6 +90,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
             equipamentos: Array.isArray(s.equipamentos) ? s.equipamentos : [],
             status: s.status || "pendente",
             is_pacote: !!s.is_pacote,
+            tipo_cobranca: s.tipo_cobranca || "diaria",
           });
         })
         .finally(() => setCarregando(false));
@@ -98,17 +100,22 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, servicoId, dataInicial]);
 
-  // Recalcula totais sempre que mudar cachê, equipamentos, datas ou desconto
+  // Recalcula totais sempre que mudar cachê, equipamentos, datas, desconto ou tipo de cobrança
   useEffect(() => {
     const nDiarias = (form.datas || []).length || 1;
-    const total = (Number(form.valor_diaria_cache) + Number(form.valor_diaria_equipamentos)) * nDiarias;
+    const cache = Number(form.valor_diaria_cache) || 0;
+    const equip = Number(form.valor_diaria_equipamentos) || 0;
+    // "diaria": multiplica pelo número de diárias; "periodo": valor único pelo período
+    const total = form.tipo_cobranca === "periodo"
+      ? cache + equip
+      : (cache + equip) * nDiarias;
     setForm((prev) => ({
       ...prev,
       valor_total: total,
       valor_final: Math.max(0, total - Number(prev.valor_desconto || 0)),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.valor_diaria_cache, form.valor_diaria_equipamentos, form.datas?.length, form.valor_desconto]);
+  }, [form.valor_diaria_cache, form.valor_diaria_equipamentos, form.datas?.length, form.valor_desconto, form.tipo_cobranca]);
 
   function adicionarData(d) {
     if (!d) return;
@@ -200,6 +207,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
         data_previsao_pagamento: form.data_previsao_pagamento || null,
         status: form.status || "pendente",
         is_pacote: !!form.is_pacote,
+        tipo_cobranca: form.tipo_cobranca || "diaria",
         equipamentos: form.is_pacote ? [] : mappedEquipamentos,
       };
       if (modoEdicao) {
@@ -248,7 +256,34 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
               </select>
             </label>
 
-            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            {/* Tipo de cobrança: por diária ou por período */}
+            <div className="col-span-12 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Cobrança
+              <div className="flex items-center gap-4 h-8">
+                <label className="flex items-center gap-1.5 cursor-pointer font-normal">
+                  <input
+                    type="radio"
+                    name="tipo_cobranca"
+                    value="diaria"
+                    checked={form.tipo_cobranca === "diaria"}
+                    onChange={() => setForm((prev) => ({ ...prev, tipo_cobranca: "diaria" }))}
+                  />
+                  Por diária
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer font-normal">
+                  <input
+                    type="radio"
+                    name="tipo_cobranca"
+                    value="periodo"
+                    checked={form.tipo_cobranca === "periodo"}
+                    onChange={() => setForm((prev) => ({ ...prev, tipo_cobranca: "periodo" }))}
+                  />
+                  Por período
+                </label>
+              </div>
+            </div>
+
+            <label className="col-span-12 md:col-span-5 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Cliente
               <select value={form.cliente_id || ""} className="w-full"
                 onChange={(e) => setForm({ ...form, cliente_id: e.target.value })}>
