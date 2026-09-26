@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../api/config";
 import Modal from "../Modal";
 import CurrencyInput from "../CurrencyInput";
