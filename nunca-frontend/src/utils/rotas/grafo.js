@@ -11,49 +11,59 @@
  *    Ausência de aresta = peso Infinity; nenhum algoritmo abaixo usa uma
  *    aresta inexistente.
  *
- * Problema: encontrar a ordem de visita de menor custo total que parte do
- * primeiro endereço e passa por todos os outros exatamente uma vez
- * (Caixeiro Viajante — TSP, caminho aberto ou ciclo).
+ * Problema: menor caminho que sai de um vértice ORIGEM fixo, passa por todos os
+ * INTERMEDIÁRIOS exatamente uma vez, em qualquer ordem, e termina num vértice
+ * DESTINO fixo (ou em qualquer intermediário, se não houver destino).
+ * É o Caixeiro Viajante de caminho com extremos fixos: só a ordem dos
+ * intermediários é otimizada.
  *
- *  - n ≤ LIMITE_EXATO  → Held-Karp (programação dinâmica, ótimo garantido, O(n²·2ⁿ))
- *  - n >  LIMITE_EXATO → Vizinho mais próximo + 2-opt (heurística, O(n³) por passada)
+ *  - até LIMITE_EXATO intermediários → Held-Karp (programação dinâmica, ótimo
+ *    garantido, O(k²·2ᵏ))
+ *  - acima → Vizinho mais próximo + 2-opt (heurística)
+ *
+ * Ida e volta são problemas diferentes (garagem → equipe → cliente e
+ * cliente → equipe → garagem): com mãos únicas, a melhor ordem da volta não é
+ * necessariamente a da ida invertida.
  */
 
 export const LIMITE_EXATO = 12;
 
-/** Custo total de uma ordem de visita. */
-export function custoRota(matriz, ordem, voltarAoInicio = false) {
+/** Custo total de uma sequência de vértices. */
+export function custoRota(matriz, ordem) {
   let total = 0;
   for (let i = 0; i < ordem.length - 1; i++) total += matriz[ordem[i]][ordem[i + 1]];
-  if (voltarAoInicio && ordem.length > 1) total += matriz[ordem[ordem.length - 1]][ordem[0]];
   return total;
 }
 
 /**
- * Held-Karp: dp[mask][j] = menor custo saindo de 0, visitando exatamente os
- * vértices de `mask` e terminando em j. Retorna null se não houver roteiro viável.
+ * Held-Karp com extremos fixos. dp[mask][j] = menor custo saindo da origem,
+ * visitando exatamente os intermediários de `mask` e parando no intermediário j.
+ * Retorna a sequência completa (origem, ..., destino) ou null se inviável.
  */
-export function heldKarp(matriz, voltarAoInicio = false) {
-  const n = matriz.length;
-  if (n <= 2) return custoRota(matriz, [...Array(n).keys()], voltarAoInicio) < Infinity ? [...Array(n).keys()] : null;
+function heldKarp(matriz, origem, intermediarios, destino) {
+  const k = intermediarios.length;
+  const fechar = (seq) => (destino == null ? seq : [...seq, destino]);
+  if (k === 0) {
+    const seq = fechar([origem]);
+    return custoRota(matriz, seq) < Infinity ? seq : null;
+  }
 
-  const total = 1 << n;
-  const dp = Array.from({ length: total }, () => new Float64Array(n).fill(Infinity));
-  const pai = Array.from({ length: total }, () => new Int8Array(n).fill(-1));
-  dp[1][0] = 0;
+  const total = 1 << k;
+  const dp = Array.from({ length: total }, () => new Float64Array(k).fill(Infinity));
+  const pai = Array.from({ length: total }, () => new Int8Array(k).fill(-1));
+  for (let j = 0; j < k; j++) dp[1 << j][j] = matriz[origem][intermediarios[j]];
 
-  for (let mask = 1; mask < total; mask += 2) {
-    // só máscaras que contêm o vértice inicial (bit 0)
-    for (let j = 0; j < n; j++) {
+  for (let mask = 1; mask < total; mask++) {
+    for (let j = 0; j < k; j++) {
       const atual = dp[mask][j];
       if (atual === Infinity) continue;
-      for (let k = 1; k < n; k++) {
-        if (mask & (1 << k)) continue;
-        const prox = mask | (1 << k);
-        const custo = atual + matriz[j][k];
-        if (custo < dp[prox][k]) {
-          dp[prox][k] = custo;
-          pai[prox][k] = j;
+      for (let p = 0; p < k; p++) {
+        if (mask & (1 << p)) continue;
+        const prox = mask | (1 << p);
+        const custo = atual + matriz[intermediarios[j]][intermediarios[p]];
+        if (custo < dp[prox][p]) {
+          dp[prox][p] = custo;
+          pai[prox][p] = j;
         }
       }
     }
@@ -61,84 +71,85 @@ export function heldKarp(matriz, voltarAoInicio = false) {
 
   const cheio = total - 1;
   let melhor = Infinity;
-  let fim = -1;
-  for (let j = 1; j < n; j++) {
-    const custo = dp[cheio][j] + (voltarAoInicio ? matriz[j][0] : 0);
+  let ultimo = -1;
+  for (let j = 0; j < k; j++) {
+    const custo = dp[cheio][j] + (destino == null ? 0 : matriz[intermediarios[j]][destino]);
     if (custo < melhor) {
       melhor = custo;
-      fim = j;
+      ultimo = j;
     }
   }
-
   if (melhor === Infinity) return null;
 
-  const ordem = [];
+  const meio = [];
   let mask = cheio;
-  let v = fim;
-  while (v !== -1) {
-    ordem.push(v);
-    const anterior = pai[mask][v];
-    mask &= ~(1 << v);
-    v = anterior;
+  let j = ultimo;
+  while (j !== -1) {
+    meio.push(intermediarios[j]);
+    const anterior = pai[mask][j];
+    mask &= ~(1 << j);
+    j = anterior;
   }
-  return ordem.reverse();
+  return fechar([origem, ...meio.reverse()]);
 }
 
-/** Heurística gulosa: sempre vai para o vértice não visitado mais próximo. */
-export function vizinhoMaisProximo(matriz) {
-  const n = matriz.length;
-  const visitado = new Array(n).fill(false);
-  const ordem = [0];
-  visitado[0] = true;
-  for (let passo = 1; passo < n; passo++) {
-    const atual = ordem[ordem.length - 1];
-    let melhor = -1;
-    for (let k = 0; k < n; k++) {
-      if (!visitado[k] && (melhor === -1 || matriz[atual][k] < matriz[atual][melhor])) melhor = k;
-    }
-    visitado[melhor] = true;
-    ordem.push(melhor);
+/** Heurística gulosa: da origem, sempre vai ao intermediário não visitado mais próximo. */
+function vizinhoMaisProximo(matriz, origem, intermediarios) {
+  const restantes = new Set(intermediarios);
+  const seq = [origem];
+  while (restantes.size) {
+    const atual = seq[seq.length - 1];
+    let melhor = null;
+    for (const v of restantes) if (melhor === null || matriz[atual][v] < matriz[atual][melhor]) melhor = v;
+    restantes.delete(melhor);
+    seq.push(melhor);
   }
-  return ordem;
+  return seq;
 }
 
 /**
- * 2-opt: inverte trechos da rota enquanto isso reduzir o custo.
- * Recalcula o custo completo a cada troca para funcionar com matriz assimétrica.
- * O vértice 0 (partida) nunca sai da primeira posição.
+ * 2-opt: inverte trechos do meio da sequência enquanto isso reduzir o custo.
+ * Recalcula o custo completo a cada troca (matriz assimétrica). Origem e
+ * destino nunca saem do lugar.
  */
-export function doisOpt(matriz, ordemInicial, voltarAoInicio = false) {
-  let ordem = [...ordemInicial];
-  let melhorCusto = custoRota(matriz, ordem, voltarAoInicio);
+function doisOpt(matriz, seqInicial, destinoFixo) {
+  let seq = [...seqInicial];
+  let melhorCusto = custoRota(matriz, seq);
+  const ultimoMovel = destinoFixo ? seq.length - 2 : seq.length - 1;
   let melhorou = true;
   while (melhorou) {
     melhorou = false;
-    for (let i = 1; i < ordem.length - 1; i++) {
-      for (let k = i + 1; k < ordem.length; k++) {
-        const candidata = [...ordem.slice(0, i), ...ordem.slice(i, k + 1).reverse(), ...ordem.slice(k + 1)];
-        const custo = custoRota(matriz, candidata, voltarAoInicio);
+    for (let i = 1; i < ultimoMovel; i++) {
+      for (let k = i + 1; k <= ultimoMovel; k++) {
+        const candidata = [...seq.slice(0, i), ...seq.slice(i, k + 1).reverse(), ...seq.slice(k + 1)];
+        const custo = custoRota(matriz, candidata);
         if (custo + 1e-9 < melhorCusto) {
-          ordem = candidata;
+          seq = candidata;
           melhorCusto = custo;
           melhorou = true;
         }
       }
     }
   }
-  return ordem;
+  return seq;
 }
 
 /**
- * Ponto de entrada: devolve a ordem de visita (índices da matriz, começando em 0)
- * e o algoritmo usado. `ordem` é null quando não existe roteiro que passe por
- * todos os vértices usando apenas arestas existentes.
+ * Ponto de entrada. `origem` e `destino` são índices da matriz (destino pode ser
+ * null = termina no último intermediário que for melhor); os demais vértices são
+ * intermediários. Devolve a sequência completa de índices e o algoritmo usado;
+ * `ordem` é null quando não existe caminho usando apenas arestas existentes.
  */
-export function menorRoteiro(matriz, { voltarAoInicio = false } = {}) {
-  const n = matriz.length;
-  if (n <= LIMITE_EXATO) return { ordem: heldKarp(matriz, voltarAoInicio), algoritmo: "Held-Karp (ótimo)" };
-  const ordem = doisOpt(matriz, vizinhoMaisProximo(matriz), voltarAoInicio);
-  const viavel = custoRota(matriz, ordem, voltarAoInicio) < Infinity;
-  return { ordem: viavel ? ordem : null, algoritmo: "Vizinho mais próximo + 2-opt" };
+export function menorCaminho(matriz, { origem, destino = null }) {
+  const intermediarios = [...matriz.keys()].filter((v) => v !== origem && v !== destino);
+  if (intermediarios.length <= LIMITE_EXATO) {
+    return { ordem: heldKarp(matriz, origem, intermediarios, destino), algoritmo: "Held-Karp (ótimo)" };
+  }
+  let seq = vizinhoMaisProximo(matriz, origem, intermediarios);
+  if (destino != null) seq.push(destino);
+  seq = doisOpt(matriz, seq, destino != null);
+  const viavel = custoRota(matriz, seq) < Infinity;
+  return { ordem: viavel ? seq : null, algoritmo: "Vizinho mais próximo + 2-opt" };
 }
 
 /** Vértices sem aresta de entrada ou de saída (inalcançáveis pela mão das ruas). */
