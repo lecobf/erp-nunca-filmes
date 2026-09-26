@@ -34,7 +34,10 @@ export default function ModalEquipamentos({
       ? e
       : e?.id ?? e?.equipamento_id ?? e?.equipamento?.id ?? null;
 
-  // Carrega a lista quando abre e inicializa quantidades
+  // Carrega a lista quando abre e inicializa quantidades.
+  // Aplica quantidades pré-selecionadas aqui mesmo para evitar condição de corrida:
+  // se fizéssemos isso num segundo effect, o resultado async desta busca chegaria
+  // depois e sobrescreveria as quantidades do serviço com o estoque do equipamento.
   useEffect(() => {
     if (!isOpen) { setBusca(""); return; }
     (async () => {
@@ -43,8 +46,20 @@ export default function ModalEquipamentos({
         const listaApi = res.data || [];
         setLista(listaApi);
 
+        // Monta lookup de quantidades do serviço a partir dos pré-selecionados
+        const preQMap = new Map();
+        (preSelecionados || []).forEach((e) => {
+          const id = toId(e);
+          if (id != null && typeof e === "object" && e != null) {
+            preQMap.set(id, Number(e.quantidade ?? e.qtd ?? 1) || 1);
+          }
+        });
+
+        // Para cada equipamento: usa qtd do serviço se pré-selecionado, senão estoque
         const q = new Map();
-        listaApi.forEach((it) => q.set(it.id, getQuantidadeInicial(it)));
+        listaApi.forEach((it) => {
+          q.set(it.id, preQMap.has(it.id) ? preQMap.get(it.id) : getQuantidadeInicial(it));
+        });
         setQuantidades(q);
       } catch (err) {
         console.error("Erro ao carregar equipamentos:", err);
@@ -52,34 +67,16 @@ export default function ModalEquipamentos({
         setQuantidades(new Map());
       }
     })();
-  }, [isOpen]);
+  }, [isOpen, preSelecionados]);
 
-  // Quando abre (ou muda a prop), aplica pré-seleção + quantidade
+  // Aplica apenas os checkboxes pré-selecionados (quantidades já tratadas acima)
   useEffect(() => {
-    if (!isOpen) return;
-    if (!preSelecionados) return; // evita resetar seleção à toa
-
-    const ids = new Set();
-    const nextQ = new Map(quantidades); // preserva quantidades já definidas
-
-    (preSelecionados || []).forEach((e) => {
-      const id = toId(e);
-      if (id === null || id === undefined) return;
-
-      ids.add(id);
-
-      // Se vier quantidade do pai, usa; senão mantém a que já temos ou o default 1
-      const qIni =
-        typeof e === "object" && e
-          ? Number(e.quantidade ?? e.qtd ?? e.estoque ?? 1) || 1
-          : nextQ.get(id) ?? 1;
-
-      nextQ.set(id, qIni);
-    });
-
+    if (!isOpen || !preSelecionados) return;
+    const ids = new Set(
+      (preSelecionados || []).map(toId).filter((id) => id != null)
+    );
     setSelectedIds(ids);
-    setQuantidades(nextQ);
-  }, [isOpen, preSelecionados]); // dependências estáveis
+  }, [isOpen, preSelecionados]);
 
   const toggle = (id) => {
     setSelectedIds((prev) => {
