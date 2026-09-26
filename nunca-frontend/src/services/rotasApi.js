@@ -1,7 +1,9 @@
 /**
  * Provedores externos do módulo de Rotas (gratuitos, sem chave de API):
  *
- *  - Photon (komoot) — geocodificação com autocomplete sobre dados OpenStreetMap
+ *  - HERE (via backend /geocodificacao, chave HERE_API_KEY no .env do servidor) —
+ *    autocomplete de endereços com números de casa; usado quando configurado
+ *  - Photon (komoot) — autocomplete sobre OpenStreetMap, usado sem chave HERE
  *  - Valhalla (FOSSGIS) — matriz de tempos/distâncias e geometria do trajeto,
  *                        otimizando por menor tempo ou por menor distância
  *
@@ -12,6 +14,8 @@
  * Os servidores públicos têm limites de uso — em produção, hospedar Photon/Valhalla
  * próprios ou contratar um provedor.
  */
+import { API_BASE_URL } from "../api/config";
+
 const PHOTON_URL = "https://photon.komoot.io/api/";
 const VALHALLA_URL = "https://valhalla1.openstreetmap.de";
 
@@ -59,7 +63,7 @@ const distancia2 = ([a, b], [c, d]) => (a - c) ** 2 + ((b - d) * Math.cos((a * M
  * (o usuário ajusta arrastando o marcador no mapa). Resultados ordenados pela
  * proximidade de `perto`.
  */
-export async function buscarEnderecos(texto, { perto, signal } = {}) {
+async function buscarPhoton(texto, { perto, signal } = {}) {
   const { rua, numero } = separarNumero(texto);
   const [exatos, ruas] = await Promise.all([
     consultarPhoton(texto, perto, signal),
@@ -82,6 +86,42 @@ export async function buscarEnderecos(texto, { perto, signal } = {}) {
   const unicas = [...new Map(sugestoes.map((s) => [s.endereco, s])).values()];
   if (perto) unicas.sort((x, y) => distancia2(x.coords, perto) - distancia2(y.coords, perto));
   return unicas.slice(0, 8);
+}
+
+async function chamarBackend(caminho, signal) {
+  const res = await fetch(`${API_BASE_URL}${caminho}`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` },
+    signal,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `Falha na busca de endereços (${res.status})`);
+  return data;
+}
+
+let hereDisponivel = null; // Promise<boolean>, consultada uma vez por carregamento
+
+/** true quando o backend tem chave HERE configurada. */
+export function usaHere() {
+  if (!hereDisponivel) {
+    hereDisponivel = chamarBackend("/geocodificacao/status")
+      .then((d) => Boolean(d.here))
+      .catch(() => {
+        hereDisponivel = null; // tenta de novo na próxima busca
+        return false;
+      });
+  }
+  return hereDisponivel;
+}
+
+/** Sugestões de endereço: HERE se configurado no backend, senão Photon. */
+export async function buscarEnderecos(texto, { perto, signal } = {}) {
+  if (!(await usaHere())) return buscarPhoton(texto, { perto, signal });
+  const params = new URLSearchParams({ q: texto });
+  if (perto) {
+    params.set("lat", String(perto[0]));
+    params.set("lon", String(perto[1]));
+  }
+  return chamarBackend(`/geocodificacao/sugestoes?${params}`, signal);
 }
 
 /**

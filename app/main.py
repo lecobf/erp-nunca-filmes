@@ -13,6 +13,7 @@ from app.routers.custos import router as custos_router
 from app.routers.equipamentos import router as equipamentos_router
 from app.routers.dashboard import router as dashboard_router
 from app.routers.auth import router as auth_router
+from app.routers.geocodificacao import router as geocodificacao_router
 
 # Importa modelos e banco
 from app.core.db import engine, SessionLocal
@@ -95,6 +96,7 @@ app.include_router(pagamentos_router)
 app.include_router(custos_router)
 app.include_router(equipamentos_router)
 app.include_router(dashboard_router)
+app.include_router(geocodificacao_router)
 
 # ============================================================
 # 🔹 Healthcheck simples

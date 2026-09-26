@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Trash2, Flag, Loader2, MapPin, AlertTriangle } from "lucide-react";
-import { buscarEnderecos, matrizDeCustos, tracarRota } from "../services/rotasApi";
+import { buscarEnderecos, matrizDeCustos, tracarRota, usaHere } from "../services/rotasApi";
 import { menorRoteiro, verticesIsolados } from "../utils/rotas/grafo";
 
 const STORAGE_KEY = "rotas.pontos";
@@ -62,6 +62,11 @@ function BuscaEndereco({ perto, onSelecionar }) {
   const [ativo, setAtivo] = useState(-1);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
+  const [fonteHere, setFonteHere] = useState(false);
+
+  useEffect(() => {
+    usaHere().then(setFonteHere);
+  }, []);
 
   useEffect(() => {
     if (texto.trim().length < 3) {
@@ -150,6 +155,11 @@ function BuscaEndereco({ perto, onSelecionar }) {
               </button>
             </li>
           ))}
+          {fonteHere && (
+            <li className="px-3 py-1 text-[10px] text-neutral-400 text-right border-t border-neutral-100">
+              Endereços © HERE
+            </li>
+          )}
         </ul>
       )}
     </div>
@@ -167,6 +177,11 @@ export default function Rotas() {
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [erroRota, setErroRota] = useState("");
+  const [hereAtivo, setHereAtivo] = useState(false);
+
+  useEffect(() => {
+    usaHere().then(setHereAtivo);
+  }, []);
   const idSeq = useRef(Date.now());
 
   useEffect(() => {
@@ -319,7 +334,11 @@ export default function Rotas() {
         <div className="card overflow-hidden relative z-0">
           <MapContainer center={CENTRO_PADRAO} zoom={12} scrollWheelZoom style={{ height: 440 }}>
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              key={String(hereAtivo)}
+              attribution={
+                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' +
+                (hereAtivo ? " | Endereços &copy; HERE" : "")
+              }
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <AjustarMapa pontos={coordsMapa} />
