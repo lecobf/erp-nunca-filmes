@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { api } from "../../api/config";
 import Modal from "../Modal";
 import CurrencyInput from "../CurrencyInput";
 import DateInput from "../DateInput";
 import { fmtBRL, fmtDateBR } from "../../utils/formatters";
-import { X, Trash2, Printer } from "lucide-react";
+import { X, Trash2, Printer, ChevronDown, ChevronUp } from "lucide-react";
 import ModalEquipamentos from "../servicos/ModalEquipamentos";
 import ModalOrcamento from "../servicos/ModalOrcamento";
 
@@ -17,6 +17,54 @@ function DateChip({ date, onRemove }) {
         onClick={() => onRemove(date)}>
         <X size={10} />
       </button>
+    </span>
+  );
+}
+
+// Agrupa datas consecutivas em runs. Retorna array de arrays:
+// cada sub-array com 1 elemento = data avulsa; com 2+ = perÃ­odo contÃ­nuo.
+function groupDates(sortedDates) {
+  if (!sortedDates.length) return [];
+  const groups = [];
+  let current = [sortedDates[0]];
+  for (let i = 1; i < sortedDates.length; i++) {
+    const prev = new Date(sortedDates[i - 1] + "T12:00:00");
+    const cur  = new Date(sortedDates[i]     + "T12:00:00");
+    if ((cur - prev) / 86400000 === 1) {
+      current.push(sortedDates[i]);
+    } else {
+      groups.push(current);
+      current = [sortedDates[i]];
+    }
+  }
+  groups.push(current);
+  return groups;
+}
+
+// Chip compacto para um perÃ­odo contÃ­nuo. ClicÃ¡vel para expandir/recolher.
+function RangeChip({ dates, onRemoveAll, onRemoveOne }) {
+  const [expanded, setExpanded] = useState(false);
+  const inicio = dates[0];
+  const fim    = dates[dates.length - 1];
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5">
+      <span className="inline-flex items-center gap-1 text-xs text-blue-700 font-medium whitespace-nowrap">
+        {fmtDateBR(inicio)} â€” {fmtDateBR(fim)}
+        <span className="text-blue-400 font-normal">Â· {dates.length}d</span>
+        <button type="button" tabIndex={-1} title={expanded ? "Recolher" : "Ver datas"}
+          className="text-blue-400 hover:text-blue-700 leading-none"
+          onClick={() => setExpanded((v) => !v)}>
+          {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+        </button>
+        <button type="button" tabIndex={-1} title="Remover perÃ­odo"
+          className="text-blue-300 hover:text-blue-700 leading-none ml-0.5"
+          onClick={onRemoveAll}>
+          <X size={10} />
+        </button>
+      </span>
+      {expanded && dates.map((d) => (
+        <DateChip key={d} date={d} onRemove={onRemoveOne} />
+      ))}
     </span>
   );
 }
@@ -39,15 +87,15 @@ const formVazio = (dataInicial) => ({
 });
 
 /**
- * Modal de criar/editar/excluir serviço, usada só pela tela de Calendário —
- * não reaproveita nem altera a modal/formulário já existentes em Servicos.jsx.
+ * Modal de criar/editar/excluir serviÃ§o, usada sÃ³ pela tela de CalendÃ¡rio â€”
+ * nÃ£o reaproveita nem altera a modal/formulÃ¡rio jÃ¡ existentes em Servicos.jsx.
  *
  * Props:
  *  - isOpen: boolean
- *  - servicoId: number|null   (null = modo criação)
- *  - dataInicial: string|null ("YYYY-MM-DD", usado só na criação)
+ *  - servicoId: number|null   (null = modo criaÃ§Ã£o)
+ *  - dataInicial: string|null ("YYYY-MM-DD", usado sÃ³ na criaÃ§Ã£o)
  *  - onClose: () => void
- *  - onSalvo: () => void      (chamado após criar/editar/excluir com sucesso)
+ *  - onSalvo: () => void      (chamado apÃ³s criar/editar/excluir com sucesso)
  */
 export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial, onClose, onSalvo }) {
   const modoEdicao = servicoId != null;
@@ -102,12 +150,12 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, servicoId, dataInicial]);
 
-  // Recalcula totais sempre que mudar cachê, equipamentos, datas, desconto ou tipo de cobrança
+  // Recalcula totais sempre que mudar cachÃª, equipamentos, datas, desconto ou tipo de cobranÃ§a
   useEffect(() => {
     const nDiarias = (form.datas || []).length || 1;
     const cache = Number(form.valor_diaria_cache) || 0;
     const equip = Number(form.valor_diaria_equipamentos) || 0;
-    // "diaria": multiplica pelo número de diárias; "periodo": valor único pelo período
+    // "diaria": multiplica pelo nÃºmero de diÃ¡rias; "periodo": valor Ãºnico pelo perÃ­odo
     const total = form.tipo_cobranca === "periodo"
       ? cache + equip
       : (cache + equip) * nDiarias;
@@ -133,7 +181,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
     setForm((prev) => ({ ...prev, datas: (prev.datas || []).filter((x) => x !== d) }));
   }
 
-  // Gera todas as datas entre início e fim (inclusive), usando meio-dia para evitar problemas de DST
+  // Gera todas as datas entre inÃ­cio e fim (inclusive), usando meio-dia para evitar problemas de DST
   function datasNoPeriodo(inicio, fim) {
     const lista = [];
     const cur = new Date(inicio + "T12:00:00");
@@ -148,7 +196,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
   function adicionarPeriodo() {
     if (!periodoInicio || !periodoFim) return;
     if (periodoFim < periodoInicio) {
-      alert("A data final deve ser igual ou posterior à data inicial.");
+      alert("A data final deve ser igual ou posterior Ã  data inicial.");
       return;
     }
     const novas = datasNoPeriodo(periodoInicio, periodoFim);
@@ -193,7 +241,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
           quantidade: Number(e.quantidade ?? e.qtd ?? 1) || 1,
         }))
         .filter((e) => e.equipamento_id != null);
-      // Pacote marcado exige valor preenchido; sem pacote, equipamentos são opcionais
+      // Pacote marcado exige valor preenchido; sem pacote, equipamentos sÃ£o opcionais
       if (form.is_pacote && !(Number(form.valor_diaria_equipamentos) > 0)) {
         alert("Informe o valor de equipamentos para o pacote.");
         return;
@@ -226,27 +274,27 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
         try { msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail, null, 2); }
         catch { msg = String(data.detail); }
       }
-      alert(`Erro ao salvar serviço:\n${msg}`);
+      alert(`Erro ao salvar serviÃ§o:\n${msg}`);
     }
   }
 
   async function excluir() {
     if (!servicoId) return;
-    if (!window.confirm("Tem certeza que deseja excluir este serviço?")) return;
+    if (!window.confirm("Tem certeza que deseja excluir este serviÃ§o?")) return;
     try {
       await api.delete(`/servicos/${servicoId}`);
       onSalvo?.();
       onClose();
     } catch (err) {
-      alert("Erro ao excluir serviço.");
+      alert("Erro ao excluir serviÃ§o.");
     }
   }
 
   return (
     <>
-      <Modal isOpen={isOpen} onClose={onClose} title={modoEdicao ? "Editar Serviço" : "Novo Serviço"}>
+      <Modal isOpen={isOpen} onClose={onClose} title={modoEdicao ? "Editar ServiÃ§o" : "Novo ServiÃ§o"}>
         {carregando ? (
-          <div className="text-sm text-neutral-500 py-6 text-center">Carregando…</div>
+          <div className="text-sm text-neutral-500 py-6 text-center">Carregandoâ€¦</div>
         ) : (
           <div className="grid grid-cols-12 gap-3">
             <label className="col-span-6 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
@@ -258,9 +306,9 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
               </select>
             </label>
 
-            {/* Tipo de cobrança: por diária ou por período */}
+            {/* Tipo de cobranÃ§a: por diÃ¡ria ou por perÃ­odo */}
             <div className="col-span-12 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Cobrança
+              CobranÃ§a
               <div className="flex items-center gap-4 h-8">
                 <label className="flex items-center gap-1.5 cursor-pointer font-normal">
                   <input
@@ -270,7 +318,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
                     checked={form.tipo_cobranca === "diaria"}
                     onChange={() => setForm((prev) => ({ ...prev, tipo_cobranca: "diaria" }))}
                   />
-                  Por diária
+                  Por diÃ¡ria
                 </label>
                 <label className="flex items-center gap-1.5 cursor-pointer font-normal">
                   <input
@@ -280,7 +328,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
                     checked={form.tipo_cobranca === "periodo"}
                     onChange={() => setForm((prev) => ({ ...prev, tipo_cobranca: "periodo" }))}
                   />
-                  Por período
+                  Por perÃ­odo
                 </label>
               </div>
             </div>
@@ -289,7 +337,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
               Cliente
               <select value={form.cliente_id || ""} className="w-full"
                 onChange={(e) => setForm({ ...form, cliente_id: e.target.value })}>
-                <option value="">Selecione…</option>
+                <option value="">Selecioneâ€¦</option>
                 {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
               </select>
             </label>
@@ -297,7 +345,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
             <div className="col-span-12 flex flex-col gap-2 text-xs font-medium text-neutral-600">
               Datas de Trabalho *
 
-              {/* Seleção por período */}
+              {/* SeleÃ§Ã£o por perÃ­odo */}
               <div className="flex flex-wrap items-end gap-2">
                 <label className="flex flex-col gap-0.5">
                   De
@@ -308,7 +356,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
                   />
                 </label>
                 <label className="flex flex-col gap-0.5">
-                  Até
+                  AtÃ©
                   <DateInput
                     value={periodoFim}
                     onChange={setPeriodoFim}
@@ -321,15 +369,29 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
                   disabled={!periodoInicio || !periodoFim}
                   className="btn-secondary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-40"
                 >
-                  + Adicionar período
+                  + Adicionar perÃ­odo
                 </button>
               </div>
 
-              {/* Chips de datas selecionadas + campo de data avulsa */}
-              <div className="flex flex-wrap items-center gap-1.5 min-h-[34px] border border-neutral-300 rounded px-2 py-1.5 bg-white">
-                {(form.datas || []).map((d) => (
-                  <DateChip key={d} date={d} onRemove={removerData} />
-                ))}
+              {/* Chips de datas â€” perÃ­odos contÃ­nuos exibidos compactamente, avulsas individualmente */}
+              <div className="flex flex-wrap items-start gap-1.5 min-h-[34px] border border-neutral-300 rounded px-2 py-1.5 bg-white">
+                {groupDates(form.datas || []).map((grupo) =>
+                  grupo.length >= 2 ? (
+                    <RangeChip
+                      key={grupo[0]}
+                      dates={grupo}
+                      onRemoveAll={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          datas: prev.datas.filter((d) => !grupo.includes(d)),
+                        }))
+                      }
+                      onRemoveOne={removerData}
+                    />
+                  ) : (
+                    <DateChip key={grupo[0]} date={grupo[0]} onRemove={removerData} />
+                  )
+                )}
                 <DateInput
                   value={novaData}
                   placeholder="+ data avulsa"
@@ -338,26 +400,26 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
                 />
               </div>
               <span className="text-neutral-400">
-                {(form.datas || []).length} {(form.datas || []).length === 1 ? "diária" : "diárias"}
+                {(form.datas || []).length} {(form.datas || []).length === 1 ? "diÃ¡ria" : "diÃ¡rias"}
               </span>
             </div>
 
             <label className="col-span-12 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Descrição
+              DescriÃ§Ã£o
               <input type="text" value={form.descricao || ""} placeholder="Ex: Job Coca-Cola SP" className="w-full"
                 onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
             </label>
 
             {form.tipo_servico === "Job" && (
               <label className="col-span-12 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-                {form.tipo_cobranca === "periodo" ? "Cachê por Período" : "Valor Diária Cachê"}
+                {form.tipo_cobranca === "periodo" ? "CachÃª por PerÃ­odo" : "Valor DiÃ¡ria CachÃª"}
                 <CurrencyInput value={Number(form.valor_diaria_cache) || 0} className="w-full"
                   onChange={(val) => setForm({ ...form, valor_diaria_cache: val })} />
               </label>
             )}
 
             <label className={`${form.tipo_servico === "Job" ? "col-span-5" : "col-span-8"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
-              {form.tipo_cobranca === "periodo" ? "Equipamentos por Período" : "Valor Diária Equipamentos"}
+              {form.tipo_cobranca === "periodo" ? "Equipamentos por PerÃ­odo" : "Valor DiÃ¡ria Equipamentos"}
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <CurrencyInput
@@ -400,14 +462,14 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
             </label>
 
             <label className="col-span-6 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-              Previsão Pgto
+              PrevisÃ£o Pgto
               <div className="flex items-center gap-1.5">
                 <DateInput value={form.data_previsao_pagamento || ""}
                   onChange={(d) => setForm((prev) => ({ ...prev, data_previsao_pagamento: d }))} />
                 <button
                   type="button"
                   onClick={() => setOrcamentoAberto(true)}
-                  title="Visualizar Orçamento"
+                  title="Visualizar OrÃ§amento"
                   className="h-8 w-8 flex items-center justify-center rounded border border-neutral-300 text-neutral-500 hover:bg-neutral-100 hover:text-primary-600 transition-colors shrink-0"
                 >
                   <Printer size={14} />
@@ -436,7 +498,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
                 </button>
               ) : <span />}
               <button type="button" onClick={salvar} className="btn-primary">
-                {modoEdicao ? "Salvar Alterações" : "Salvar Serviço"}
+                {modoEdicao ? "Salvar AlteraÃ§Ãµes" : "Salvar ServiÃ§o"}
               </button>
             </div>
           </div>
@@ -457,3 +519,4 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
     </>
   );
 }
+
