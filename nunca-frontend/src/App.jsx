@@ -239,7 +239,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50 print:bg-white">
+    <div className="min-h-screen flex bg-slate-50 print:bg-white print:block print:min-h-0">
       {/* ── Sidebar desktop (lg+) ─────────────────────────── */}
       <aside className="print:hidden hidden lg:flex flex-col w-56 bg-zinc-900 text-zinc-100 shrink-0 fixed inset-y-0 left-0 z-30">
         {/* Cabeçalho com engrenagem */}
@@ -301,7 +301,7 @@ export default function App() {
           </button>
         </header>
 
-        <main className="flex-1 overflow-x-hidden pb-16 lg:pb-0 print:pb-0">
+        <main className="flex-1 overflow-x-hidden pb-16 lg:pb-0 print:pb-0 print:overflow-visible">
           <div className="max-w-7xl mx-auto">
             <Outlet />
           </div>

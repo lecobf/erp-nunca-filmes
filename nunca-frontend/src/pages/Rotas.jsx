@@ -706,6 +706,16 @@ function PaginaRotas() {
                   Motorista sai às {fmtHora(saidaMotorista)} para chegar às {horarios.ida}
                 </span>
               )}
+              {linksMaps.length > 0 && (
+                <span className="hidden print:inline text-xs">
+                  Rota completa no Google Maps:{" "}
+                  {linksMaps.map((l, i) => (
+                    <a key={l} href={l} className="text-primary-600 underline mr-1">
+                      {linksMaps.length > 1 ? `parte ${i + 1}` : "abrir"}
+                    </a>
+                  ))}
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-500">
               {calculando && <Loader2 size={14} className="animate-spin" />}
@@ -755,17 +765,18 @@ function PaginaRotas() {
               otimizada automaticamente.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+            <div className="overflow-x-auto roteiro-tabela-area">
+              <table className="w-full text-xs roteiro-tabela">
                 <thead className="text-neutral-500 bg-neutral-50">
                   <tr>
                     <th className="px-3 py-2 text-left w-8">#</th>
-                    <th className="px-3 py-2 text-left">Nome</th>
-                    <th className="px-3 py-2 text-left">Endereço</th>
+                    <th className="px-3 py-2 text-left col-nome">Nome</th>
+                    <th className="px-3 py-2 text-left col-endereco">Endereço</th>
                     <th className="px-3 py-2 text-right whitespace-nowrap">Parada (min)</th>
                     <th className="px-3 py-2 text-right whitespace-nowrap">Trecho</th>
                     <th className="px-3 py-2 text-right whitespace-nowrap">Chega</th>
                     <th className="px-3 py-2 text-right whitespace-nowrap">Sai</th>
+                    <th className="px-3 py-2 text-left whitespace-nowrap">Navegar</th>
                     <th className="px-3 py-2 w-8 print:hidden" />
                   </tr>
                 </thead>
@@ -775,7 +786,7 @@ function PaginaRotas() {
                       <td className="px-3 py-2 font-semibold text-neutral-700">
                         {v.papel === "parada" ? (pos ?? "•") : v.papel === "partida" ? "P" : "C"}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
+                      <td className="px-3 py-2 whitespace-nowrap quebra col-nome">
                         {rotuloPapel[v.papel] ? (
                           <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${classePapel[v.papel]}`}>
                             {rotuloPapel[v.papel]}
@@ -791,7 +802,7 @@ function PaginaRotas() {
                           </>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-neutral-700">{v.endereco}</td>
+                      <td className="px-3 py-2 text-neutral-700 quebra col-endereco">{v.endereco}</td>
                       <td className="px-3 py-2 text-right">
                         {v.papel === "parada" && <span className="hidden print:inline">{v.paradaMin || 0}</span>}
                         {v.papel === "parada" ? (
@@ -816,6 +827,19 @@ function PaginaRotas() {
                       </td>
                       <td className="px-3 py-2 text-right font-medium text-neutral-800 whitespace-nowrap">
                         {saidaEm ? fmtHora(saidaEm) : "—"}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {pos > 0 && (
+                          <a
+                            href={linkWaze(v.coords)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary-600 underline"
+                            title="Navegar até este endereço no Waze"
+                          >
+                            Abrir no Waze
+                          </a>
+                        )}
                       </td>
                       <td className="px-3 py-2 print:hidden">
                         <button
