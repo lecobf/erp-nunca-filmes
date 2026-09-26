@@ -24,7 +24,7 @@ if not exist "%BACK%" (
 
 echo.
 echo Substitua os textos COLE_AQUI_... pelos valores, salve (Ctrl+S) e feche.
-echo Depois reinicie o backend (START_BACK_LOCAL.bat) e o frontend (npm run dev).
+echo Depois reinicie o backend e o frontend (npm run dev).
 start "" notepad "%FRONT%"
 start "" notepad "%BACK%"
 pause

@@ -4,6 +4,15 @@ from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Carrega variáveis dos arquivos da raiz do projeto ANTES de importar os routers
+# (o banco é configurado na importação). Não sobrescreve o que já está no
+# ambiente — em produção o systemd já carrega o .env.
+RAIZ_PROJETO = Path(__file__).resolve().parent.parent
+load_dotenv(RAIZ_PROJETO / ".env")
+load_dotenv(RAIZ_PROJETO / ".env.google.local")  # chave do Google Maps (fora do git)
 
 # Importa os routers
 from app.routers.clientes import router as clientes_router
