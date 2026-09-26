@@ -8,6 +8,8 @@
  */
 import { API_BASE_URL } from "../api/config";
 
+const TEMPO_LIMITE_MS = 30000;
+
 async function chamarBackend(caminho, corpo) {
   let res;
   try {
@@ -18,9 +20,14 @@ async function chamarBackend(caminho, corpo) {
         Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
       },
       body: JSON.stringify(corpo),
+      signal: AbortSignal.timeout(TEMPO_LIMITE_MS),
     });
-  } catch {
-    throw new Error("Não foi possível falar com o servidor do ERP.");
+  } catch (e) {
+    throw new Error(
+      e.name === "TimeoutError"
+        ? "O servidor do ERP não respondeu. Verifique se o backend está rodando."
+        : "Não foi possível falar com o servidor do ERP."
+    );
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.detail || `Falha no cálculo de rotas (${res.status})`);
