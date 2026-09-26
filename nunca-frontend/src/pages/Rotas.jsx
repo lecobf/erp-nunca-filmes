@@ -270,6 +270,65 @@ function LocalFixo({ titulo, descricao, papel, ponto, perto, onDefinir, onLimpar
   );
 }
 
+/* ── Formulário de parada: endereço + nome + telefone + tempo, e só então "Incluir" ── */
+function FormParada({ perto, onIncluir }) {
+  const [endereco, setEndereco] = useState(null);
+  const [nome, setNome] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [minutos, setMinutos] = useState(0);
+  const pronto = endereco && nome.trim();
+
+  function incluir(e) {
+    e.preventDefault();
+    if (!pronto) return;
+    onIncluir({ ...endereco, nome: nome.trim(), telefone: telefone.trim(), paradaMin: minutos });
+    setEndereco(null);
+    setNome("");
+    setTelefone("");
+    setMinutos(0);
+  }
+
+  const rotulo = "flex flex-col gap-1 text-[11px] font-medium text-neutral-500";
+  return (
+    <form onSubmit={incluir} className="grid grid-cols-12 gap-2 items-end">
+      <div className={`${rotulo} col-span-12 lg:col-span-5`}>
+        Endereço *
+        {endereco ? (
+          <div className="flex items-center gap-2 border border-neutral-200 rounded px-2.5 py-1.5 text-xs text-neutral-700 bg-neutral-50 font-normal">
+            <span className="flex-1">{endereco.endereco}</span>
+            <button type="button" title="Trocar endereço" onClick={() => setEndereco(null)} className="text-neutral-400 hover:text-primary-600">
+              <Pencil size={13} />
+            </button>
+          </div>
+        ) : (
+          <BuscaEndereco perto={perto} onSelecionar={setEndereco} placeholder="Endereço da pessoa…" />
+        )}
+      </div>
+      <label className={`${rotulo} col-span-12 sm:col-span-5 lg:col-span-3`}>
+        Nome *
+        <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Ana (câmera)" />
+      </label>
+      <label className={`${rotulo} col-span-6 sm:col-span-3 lg:col-span-2`}>
+        Telefone
+        <input type="tel" value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="(51) 99999-9999" />
+      </label>
+      <label className={`${rotulo} col-span-3 sm:col-span-2 lg:col-span-1`}>
+        Parada (min)
+        <input
+          type="number"
+          min={0}
+          step={5}
+          value={minutos}
+          onChange={(e) => setMinutos(Math.max(0, Number(e.target.value) || 0))}
+        />
+      </label>
+      <button type="submit" disabled={!pronto} className="btn-primary col-span-3 sm:col-span-2 lg:col-span-1 disabled:opacity-40">
+        Incluir
+      </button>
+    </form>
+  );
+}
+
 function PaginaRotas() {
   // partida e chegada são fixas; só a ordem das paradas (equipe) é otimizada
   const [roteiro, setRoteiro] = useState(lerRoteiroSalvo);
@@ -277,7 +336,6 @@ function PaginaRotas() {
   // ida: hora em que é preciso CHEGAR ao destino final (a saída é calculada de trás para frente)
   // volta: hora de SAÍDA do local de chegada (ex.: fim da diária)
   const [horarios, setHorarios] = useState(() => ({ ida: horaAtual(), volta: horaAtual() }));
-  const [paradaMin, setParadaMin] = useState(0);
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [erroRota, setErroRota] = useState("");
@@ -302,6 +360,13 @@ function PaginaRotas() {
     [partida, chegada, paradas]
   );
 
+  // Só a geometria (quais pontos e onde) dispara novo cálculo de rota; mudar nome,
+  // telefone ou tempo de parada só refaz os horários, sem consultar o Google.
+  const assinatura = vertices.map((v) => `${v.id}:${v.coords.join(",")}`).join("|");
+  const verticesRef = useRef(vertices);
+  verticesRef.current = vertices;
+  const temChegada = Boolean(chegada);
+
   // Aviso quando falta algo para calcular o sentido escolhido
   const faltando = !partida
     ? "Defina o local de partida."
@@ -324,9 +389,10 @@ function PaginaRotas() {
       setCalculando(true);
       setErroRota("");
       try {
+        const vertices = verticesRef.current;
         const coords = vertices.map((v) => v.coords);
         const iPartida = 0;
-        const iChegada = chegada ? vertices.length - 1 : null;
+        const iChegada = temChegada ? vertices.length - 1 : null;
         const matriz = await matrizDeCustos(coords);
         const pesos = matriz.durations;
         const extremos =
@@ -341,7 +407,7 @@ function PaginaRotas() {
         }
         const trajeto = await tracarRota(ordem.map((i) => coords[i]));
         if (cancelado) return;
-        setResultado({ vertices, sentido, ordem, algoritmo, ...trajeto });
+        setResultado({ assinatura, sentido, ordem, algoritmo, ...trajeto });
       } catch (e) {
         if (cancelado) return;
         setResultado(null);
@@ -352,10 +418,10 @@ function PaginaRotas() {
     return () => {
       cancelado = true;
     };
-  }, [vertices, sentido, chegada, faltando]);
+  }, [assinatura, sentido, temChegada, faltando]);
 
   // descarta resultado calculado para vértices ou sentido que já mudaram
-  const rota = resultado?.vertices === vertices && resultado.sentido === sentido ? resultado : null;
+  const rota = resultado?.assinatura === assinatura && resultado.sentido === sentido ? resultado : null;
 
   // Horário de saída do motorista: na ida, calculado a partir da hora de chegada desejada
   // (tempo dirigindo + paradas da equipe antes do destino), arredondado para baixo
@@ -366,10 +432,10 @@ function PaginaRotas() {
     const referencia = new Date();
     referencia.setHours(h || 0, m || 0, 0, 0);
     if (sentido === "volta") return referencia;
-    const paradasAntes = rota.ordem.slice(0, -1).filter((i) => vertices[i].papel === "parada").length;
-    const totalMs = rota.trechos.reduce((acc, t) => acc + t.duracao, 0) * 1000 + paradasAntes * paradaMin * 60000;
+    const minutosParado = rota.ordem.slice(0, -1).reduce((acc, i) => acc + (vertices[i].paradaMin || 0), 0);
+    const totalMs = rota.trechos.reduce((acc, t) => acc + t.duracao, 0) * 1000 + minutosParado * 60000;
     return new Date(Math.floor((referencia.getTime() - totalMs) / 60000) * 60000);
-  }, [rota, vertices, horarios, sentido, paradaMin]);
+  }, [rota, vertices, horarios, sentido]);
 
   // Horário estimado de chegada em cada ponto; o tempo de parada só conta nas paradas da equipe
   const itinerario = useMemo(() => {
@@ -380,10 +446,11 @@ function PaginaRotas() {
       const trecho = pos > 0 ? rota.trechos[pos - 1] : null;
       if (trecho) relogio.setTime(relogio.getTime() + trecho.duracao * 1000);
       const chegadaEm = new Date(relogio);
-      if (v.papel === "parada") relogio.setTime(relogio.getTime() + paradaMin * 60000);
-      return { v, pos, trecho, chegadaEm };
+      if (v.papel === "parada") relogio.setTime(relogio.getTime() + (v.paradaMin || 0) * 60000);
+      const ultimo = pos === rota.ordem.length - 1;
+      return { v, pos, trecho, chegadaEm: pos > 0 ? chegadaEm : null, saidaEm: ultimo ? null : new Date(relogio) };
     });
-  }, [rota, vertices, saidaMotorista, paradaMin]);
+  }, [rota, vertices, saidaMotorista]);
 
   const posicaoNaRota = useMemo(() => {
     const mapa = {};
@@ -399,7 +466,13 @@ function PaginaRotas() {
 
   const novoPonto = (s) => ({ id: ++idSeq.current, endereco: s.endereco, coords: s.coords, obtidoEm: Date.now() });
   const definir = (papel, s) => setRoteiro((r) => ({ ...r, [papel]: novoPonto(s) }));
-  const adicionarParada = (s) => setRoteiro((r) => ({ ...r, paradas: [...r.paradas, novoPonto(s)] }));
+  const adicionarParada = (s) =>
+    setRoteiro((r) => ({
+      ...r,
+      paradas: [...r.paradas, { ...novoPonto(s), nome: s.nome, telefone: s.telefone, paradaMin: s.paradaMin }],
+    }));
+  const editarParada = (id, campos) =>
+    setRoteiro((r) => ({ ...r, paradas: r.paradas.map((p) => (p.id === id ? { ...p, ...campos } : p)) }));
   const atualizar = (fn) =>
     setRoteiro((r) => ({
       partida: r.partida && fn(r.partida),
@@ -453,9 +526,9 @@ function PaginaRotas() {
           <div className="space-y-1">
             <p className="text-xs font-medium text-neutral-600">
               <span className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-middle" style={{ background: CORES.parada }} />
-              Paradas <span className="font-normal text-neutral-400">— endereços da equipe; a ordem é otimizada</span>
+              Paradas <span className="font-normal text-neutral-400">— pessoas da equipe; a ordem é otimizada</span>
             </p>
-            <BuscaEndereco perto={perto} onSelecionar={adicionarParada} placeholder="Adicionar endereço da equipe…" />
+            <FormParada perto={perto} onIncluir={adicionarParada} />
           </div>
 
           <div className="flex flex-wrap items-end gap-4 text-xs font-medium text-neutral-600 border-t border-neutral-100 pt-3">
@@ -487,17 +560,6 @@ function PaginaRotas() {
                 onChange={(e) => setHorarios((h) => ({ ...h, [sentido]: e.target.value }))}
               />
             </label>
-            <label className="flex flex-col gap-1">
-              Tempo em cada parada (min)
-              <input
-                type="number"
-                min={0}
-                step={5}
-                value={paradaMin}
-                onChange={(e) => setParadaMin(Math.max(0, Number(e.target.value) || 0))}
-                className="w-28"
-              />
-            </label>
           </div>
         </div>
 
@@ -515,7 +577,7 @@ function PaginaRotas() {
               <AdvancedMarker
                 key={v.id}
                 position={latLng(v.coords)}
-                title={v.endereco}
+                title={v.nome ? `${v.nome} — ${v.endereco}` : v.endereco}
                 draggable
                 onDragEnd={(e) => e.latLng && mover(v.id, [e.latLng.lat(), e.latLng.lng()])}
               >
@@ -568,50 +630,82 @@ function PaginaRotas() {
               otimizada automaticamente.
             </p>
           ) : (
-            <table className="w-full text-xs">
-              <thead className="text-neutral-500 bg-neutral-50">
-                <tr>
-                  <th className="px-3 py-2 text-left w-10">#</th>
-                  <th className="px-3 py-2 text-left">Endereço</th>
-                  <th className="px-3 py-2 text-right whitespace-nowrap">Trecho</th>
-                  <th className="px-3 py-2 text-right whitespace-nowrap">Chegada</th>
-                  <th className="px-3 py-2 w-10" />
-                </tr>
-              </thead>
-              <tbody>
-                {itinerario.map(({ v, pos, trecho, chegadaEm }) => (
-                  <tr key={v.id} className="border-t border-neutral-100">
-                    <td className="px-3 py-2 font-semibold text-neutral-700">
-                      {v.papel === "parada" ? (pos ?? "•") : v.papel === "partida" ? "P" : "C"}
-                    </td>
-                    <td className="px-3 py-2 text-neutral-700">
-                      {rotuloPapel[v.papel] && (
-                        <span className={`mr-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${classePapel[v.papel]}`}>
-                          {rotuloPapel[v.papel]}
-                        </span>
-                      )}
-                      {v.endereco}
-                    </td>
-                    <td className="px-3 py-2 text-right text-neutral-500 whitespace-nowrap">
-                      {trecho ? `${fmtKm(trecho.distancia)} · ${fmtDuracao(trecho.duracao)}` : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right font-medium text-neutral-800 whitespace-nowrap">
-                      {chegadaEm ? (pos === 0 ? `sai ${fmtHora(chegadaEm)}` : fmtHora(chegadaEm)) : "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <button
-                        type="button"
-                        title="Remover"
-                        onClick={() => remover(v.id)}
-                        className="text-neutral-400 hover:text-red-600"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-neutral-500 bg-neutral-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left w-8">#</th>
+                    <th className="px-3 py-2 text-left">Nome</th>
+                    <th className="px-3 py-2 text-left">Endereço</th>
+                    <th className="px-3 py-2 text-right whitespace-nowrap">Parada (min)</th>
+                    <th className="px-3 py-2 text-right whitespace-nowrap">Trecho</th>
+                    <th className="px-3 py-2 text-right whitespace-nowrap">Chega</th>
+                    <th className="px-3 py-2 text-right whitespace-nowrap">Sai</th>
+                    <th className="px-3 py-2 w-8" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {itinerario.map(({ v, pos, trecho, chegadaEm, saidaEm }) => (
+                    <tr key={v.id} className="border-t border-neutral-100 align-top">
+                      <td className="px-3 py-2 font-semibold text-neutral-700">
+                        {v.papel === "parada" ? (pos ?? "•") : v.papel === "partida" ? "P" : "C"}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {rotuloPapel[v.papel] ? (
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${classePapel[v.papel]}`}>
+                            {rotuloPapel[v.papel]}
+                          </span>
+                        ) : (
+                          <>
+                            <div className="font-semibold text-neutral-800">{v.nome || "—"}</div>
+                            {v.telefone && (
+                              <a href={`tel:${v.telefone.replace(/[^\d+]/g, "")}`} className="text-[11px] text-neutral-500">
+                                {v.telefone}
+                              </a>
+                            )}
+                          </>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-neutral-700">{v.endereco}</td>
+                      <td className="px-3 py-2 text-right">
+                        {v.papel === "parada" ? (
+                          <input
+                            type="number"
+                            min={0}
+                            step={5}
+                            value={v.paradaMin || 0}
+                            onChange={(e) => editarParada(v.id, { paradaMin: Math.max(0, Number(e.target.value) || 0) })}
+                            className="w-16 text-right"
+                            title="Minutos parado neste endereço"
+                          />
+                        ) : (
+                          <span className="text-neutral-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right text-neutral-500 whitespace-nowrap">
+                        {trecho ? `${fmtKm(trecho.distancia)} · ${fmtDuracao(trecho.duracao)}` : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium text-neutral-800 whitespace-nowrap">
+                        {chegadaEm ? fmtHora(chegadaEm) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium text-neutral-800 whitespace-nowrap">
+                        {saidaEm ? fmtHora(saidaEm) : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          title="Remover"
+                          onClick={() => remover(v.id)}
+                          className="text-neutral-400 hover:text-red-600"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
