@@ -1,17 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { APIProvider, Map, AdvancedMarker, Polyline, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
 import { Trash2, Flag, Loader2, MapPin, AlertTriangle } from "lucide-react";
-import { buscarEnderecos, matrizDeCustos, tracarRota, usaHere } from "../services/rotasApi";
+import { matrizDeCustos, tracarRota } from "../services/rotasApi";
 import { menorRoteiro, verticesIsolados } from "../utils/rotas/grafo";
+
+// Chave de navegador (restrita por domínio no Google Cloud) e Map ID, em
+// nunca-frontend/.env.<modo>.local — arquivos fora do git.
+const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+const GOOGLE_MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "DEMO_MAP_ID";
 
 const STORAGE_KEY = "rotas.pontos";
 const CENTRO_PADRAO = [-30.0346, -51.2177]; // Porto Alegre
+// Termos do Google: coordenadas obtidas do Google podem ser guardadas por até 30 dias
+const VALIDADE_MS = 30 * 24 * 60 * 60 * 1000;
 
 function lerPontosSalvos() {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    const salvos = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    return salvos.filter((p) => p.obtidoEm && Date.now() - p.obtidoEm < VALIDADE_MS);
   } catch {
     return [];
   }
@@ -29,73 +35,111 @@ function fmtDuracao(s) {
   return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h${String(min % 60).padStart(2, "0")}`;
 }
 
-function iconeNumerado(rotulo, partida) {
-  return L.divIcon({
-    className: "",
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14],
-    html: `<div style="width:28px;height:28px;border-radius:9999px;background:${partida ? "#16a34a" : "#2563eb"};
-      color:#fff;font:600 12px/28px sans-serif;text-align:center;border:2px solid #fff;
-      box-shadow:0 1px 4px rgba(0,0,0,.4)">${rotulo}</div>`,
-  });
+const latLng = ([lat, lng]) => ({ lat, lng });
+
+function MarcadorNumerado({ rotulo, partida }) {
+  return (
+    <div
+      style={{
+        width: 28,
+        height: 28,
+        borderRadius: 9999,
+        background: partida ? "#16a34a" : "#2563eb",
+        color: "#fff",
+        font: "600 12px/28px sans-serif",
+        textAlign: "center",
+        border: "2px solid #fff",
+        boxShadow: "0 1px 4px rgba(0,0,0,.4)",
+        transform: "translateY(50%)", // centraliza o círculo no ponto (âncora padrão é a base)
+      }}
+    >
+      {rotulo}
+    </div>
+  );
 }
 
 /* ── Enquadra o mapa nos pontos ───────────────────────────── */
 function AjustarMapa({ pontos }) {
   const map = useMap();
+  const core = useMapsLibrary("core");
   const qtdAnterior = useRef(-1);
   useEffect(() => {
+    if (!map || !core) return;
     // só reenquadra quando entra/sai ponto; arrastar um marcador não mexe no zoom
     if (pontos.length === qtdAnterior.current) return;
     qtdAnterior.current = pontos.length;
-    if (pontos.length === 1) map.setView(pontos[0], 16);
-    else if (pontos.length > 1) map.fitBounds(pontos, { padding: [40, 40] });
-  }, [map, pontos]);
+    if (pontos.length === 1) {
+      map.setCenter(latLng(pontos[0]));
+      map.setZoom(16);
+    } else if (pontos.length > 1) {
+      const limites = new core.LatLngBounds();
+      pontos.forEach((p) => limites.extend(latLng(p)));
+      map.fitBounds(limites, 60);
+    }
+  }, [map, core, pontos]);
   return null;
 }
 
-/* ── Campo de endereço com autocomplete ───────────────────── */
+/* ── Campo de endereço com autocomplete (Google Places) ───── */
 function BuscaEndereco({ perto, onSelecionar }) {
+  const places = useMapsLibrary("places");
   const [texto, setTexto] = useState("");
   const [sugestoes, setSugestoes] = useState([]);
   const [ativo, setAtivo] = useState(-1);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState("");
-  const [fonteHere, setFonteHere] = useState(false);
+  const sessao = useRef(null); // agrupa digitação + escolha numa sessão (cobrança por sessão)
+  const consulta = useRef(0); // descarta respostas de buscas antigas
 
   useEffect(() => {
-    usaHere().then(setFonteHere);
-  }, []);
-
-  useEffect(() => {
-    if (texto.trim().length < 3) {
+    if (!places || texto.trim().length < 3) {
       setSugestoes([]);
       return;
     }
-    const ctrl = new AbortController();
+    const minha = ++consulta.current;
     const t = setTimeout(async () => {
       setCarregando(true);
       setErro("");
       try {
-        setSugestoes(await buscarEnderecos(texto.trim(), { perto, signal: ctrl.signal }));
+        sessao.current ??= new places.AutocompleteSessionToken();
+        const { suggestions } = await places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+          input: texto.trim(),
+          sessionToken: sessao.current,
+          locationBias: { center: latLng(perto), radius: 50000 },
+          includedRegionCodes: ["br"],
+          language: "pt-BR",
+          region: "br",
+        });
+        if (minha !== consulta.current) return;
+        setSugestoes(
+          suggestions
+            .filter((s) => s.placePrediction)
+            .map((s) => ({ id: s.placePrediction.placeId, endereco: s.placePrediction.text.text, predicao: s.placePrediction }))
+        );
         setAtivo(-1);
-      } catch (e) {
-        if (e.name !== "AbortError") setErro("Não foi possível buscar endereços.");
+      } catch {
+        if (minha === consulta.current) setErro("Não foi possível buscar endereços.");
       } finally {
-        setCarregando(false);
+        if (minha === consulta.current) setCarregando(false);
       }
-    }, 350);
-    return () => {
-      clearTimeout(t);
-      ctrl.abort();
-    };
-  }, [texto, perto]);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [texto, perto, places]);
 
-  function escolher(s) {
-    onSelecionar(s);
-    setTexto("");
+  async function escolher(s) {
     setSugestoes([]);
+    setCarregando(true);
+    try {
+      const lugar = s.predicao.toPlace();
+      await lugar.fetchFields({ fields: ["location", "formattedAddress"] });
+      onSelecionar({ endereco: lugar.formattedAddress || s.endereco, coords: [lugar.location.lat(), lugar.location.lng()] });
+      setTexto("");
+    } catch {
+      setErro("Não foi possível obter a localização desse endereço.");
+    } finally {
+      sessao.current = null; // a busca dos detalhes encerra a sessão
+      setCarregando(false);
+    }
   }
 
   function onKeyDown(e) {
@@ -144,22 +188,10 @@ function BuscaEndereco({ perto, onSelecionar }) {
                 }`}
               >
                 <MapPin size={13} className="mt-0.5 shrink-0 text-neutral-400" />
-                <span>
-                  {s.endereco}
-                  {s.aproximado && (
-                    <span className="block text-[11px] text-amber-600">
-                      Número não cadastrado no mapa — posição aproximada, ajuste arrastando o marcador
-                    </span>
-                  )}
-                </span>
+                <span>{s.endereco}</span>
               </button>
             </li>
           ))}
-          {fonteHere && (
-            <li className="px-3 py-1 text-[10px] text-neutral-400 text-right border-t border-neutral-100">
-              Endereços © HERE
-            </li>
-          )}
         </ul>
       )}
     </div>
@@ -168,20 +200,41 @@ function BuscaEndereco({ perto, onSelecionar }) {
 
 /* ── Página ───────────────────────────────────────────────── */
 export default function Rotas() {
+  if (!GOOGLE_MAPS_KEY) {
+    return (
+      <>
+        <div className="page-header">
+          <h1 className="page-title">Rotas</h1>
+        </div>
+        <div className="page-body">
+          <div className="card p-4 text-xs text-neutral-600 space-y-1">
+            <p className="font-semibold text-neutral-800">Google Maps não configurado.</p>
+            <p>
+              Defina <code>VITE_GOOGLE_MAPS_API_KEY</code> (e opcionalmente <code>VITE_GOOGLE_MAPS_MAP_ID</code>) em{" "}
+              <code>nunca-frontend/.env.devlocal.local</code> ou <code>.env.production.local</code> e reinicie o
+              frontend.
+            </p>
+          </div>
+        </div>
+      </>
+    );
+  }
+  return (
+    <APIProvider apiKey={GOOGLE_MAPS_KEY} language="pt-BR" region="BR">
+      <PaginaRotas />
+    </APIProvider>
+  );
+}
+
+function PaginaRotas() {
   // pontos em ordem de inserção; o índice 0 é sempre o ponto de partida
   const [pontos, setPontos] = useState(lerPontosSalvos);
   const [horaSaida, setHoraSaida] = useState(horaAtual);
   const [paradaMin, setParadaMin] = useState(0);
   const [voltar, setVoltar] = useState(false);
-  const [criterio, setCriterio] = useState("tempo"); // "tempo" | "distancia"
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [erroRota, setErroRota] = useState("");
-  const [hereAtivo, setHereAtivo] = useState(false);
-
-  useEffect(() => {
-    usaHere().then(setHereAtivo);
-  }, []);
   const idSeq = useRef(Date.now());
 
   useEffect(() => {
@@ -206,8 +259,8 @@ export default function Rotas() {
       setErroRota("");
       try {
         const coords = pontos.map((p) => p.coords);
-        const matriz = await matrizDeCustos(coords, criterio);
-        const pesos = criterio === "distancia" ? matriz.distances : matriz.durations;
+        const matriz = await matrizDeCustos(coords);
+        const pesos = matriz.durations;
         const { ordem, algoritmo } = menorRoteiro(pesos, { voltarAoInicio: voltar });
         if (!ordem) {
           const isolados = verticesIsolados(pesos).map((i) => pontos[i].endereco);
@@ -217,9 +270,9 @@ export default function Rotas() {
           );
         }
         const sequencia = voltar ? [...ordem, 0] : ordem;
-        const trajeto = await tracarRota(sequencia.map((i) => coords[i]), criterio);
+        const trajeto = await tracarRota(sequencia.map((i) => coords[i]));
         if (cancelado) return;
-        setResultado({ pontos, criterio, ordem, sequencia, algoritmo, ...trajeto });
+        setResultado({ pontos, ordem, sequencia, algoritmo, ...trajeto });
       } catch (e) {
         if (cancelado) return;
         setResultado(null);
@@ -230,10 +283,10 @@ export default function Rotas() {
     return () => {
       cancelado = true;
     };
-  }, [pontos, voltar, criterio]);
+  }, [pontos, voltar]);
 
   // descarta resultado calculado para uma lista de pontos que já mudou
-  const rota = resultado?.pontos === pontos && resultado.criterio === criterio ? resultado : null;
+  const rota = resultado?.pontos === pontos ? resultado : null;
 
   // Horário estimado de chegada em cada parada
   const itinerario = useMemo(() => {
@@ -260,13 +313,14 @@ export default function Rotas() {
 
   const perto = useMemo(() => (pontos.length ? pontos[pontos.length - 1].coords : CENTRO_PADRAO), [pontos]);
   const coordsMapa = useMemo(() => pontos.map((p) => p.coords), [pontos]);
+  const caminho = useMemo(() => rota?.linha.map(latLng), [rota]);
   const total = rota?.trechos.reduce((acc, t) => ({ d: acc.d + t.duracao, m: acc.m + t.distancia }), { d: 0, m: 0 });
 
   function adicionar(s) {
-    setPontos((ps) => [...ps, { id: ++idSeq.current, endereco: s.endereco, coords: s.coords, aproximado: s.aproximado }]);
+    setPontos((ps) => [...ps, { id: ++idSeq.current, endereco: s.endereco, coords: s.coords, obtidoEm: Date.now() }]);
   }
   const mover = (id, coords) =>
-    setPontos((ps) => ps.map((p) => (p.id === id ? { ...p, coords, aproximado: false } : p)));
+    setPontos((ps) => ps.map((p) => (p.id === id ? { ...p, coords } : p)));
   const remover = (id) => setPontos((ps) => ps.filter((p) => p.id !== id));
   const definirPartida = (id) =>
     setPontos((ps) => [ps.find((p) => p.id === id), ...ps.filter((p) => p.id !== id)]);
@@ -304,26 +358,6 @@ export default function Rotas() {
                 className="w-28"
               />
             </label>
-            <div className="flex flex-col gap-1">
-              Otimizar por
-              <div className="inline-flex rounded border border-neutral-300 overflow-hidden">
-                {[
-                  ["tempo", "Menor tempo"],
-                  ["distancia", "Menor distância (km)"],
-                ].map(([valor, rotulo]) => (
-                  <button
-                    key={valor}
-                    type="button"
-                    onClick={() => setCriterio(valor)}
-                    className={`px-3 py-1.5 text-xs ${
-                      criterio === valor ? "bg-primary-600 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {rotulo}
-                  </button>
-                ))}
-              </div>
-            </div>
             <label className="flex items-center gap-2 pb-1.5">
               <input type="checkbox" checked={voltar} onChange={(e) => setVoltar(e.target.checked)} />
               Voltar ao ponto de partida
@@ -332,39 +366,33 @@ export default function Rotas() {
         </div>
 
         <div className="card overflow-hidden relative z-0">
-          <MapContainer center={CENTRO_PADRAO} zoom={12} scrollWheelZoom style={{ height: 440 }}>
-            <TileLayer
-              key={String(hereAtivo)}
-              attribution={
-                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' +
-                (hereAtivo ? " | Endereços &copy; HERE" : "")
-              }
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+          <Map
+            mapId={GOOGLE_MAP_ID}
+            defaultCenter={latLng(CENTRO_PADRAO)}
+            defaultZoom={12}
+            gestureHandling="greedy"
+            streetViewControl={false}
+            style={{ height: 440 }}
+          >
             <AjustarMapa pontos={coordsMapa} />
             {pontos.map((p, i) => (
-              <Marker
+              <AdvancedMarker
                 key={p.id}
-                position={p.coords}
-                icon={iconeNumerado(posicaoNaRota[i] !== undefined ? posicaoNaRota[i] + 1 : i + 1, i === 0)}
+                position={latLng(p.coords)}
+                title={p.endereco}
                 draggable
-                eventHandlers={{
-                  dragend: (e) => {
-                    const { lat, lng } = e.target.getLatLng();
-                    mover(p.id, [lat, lng]);
-                  },
-                }}
+                onDragEnd={(e) => e.latLng && mover(p.id, [e.latLng.lat(), e.latLng.lng()])}
               >
-                <Popup>{p.endereco}</Popup>
-              </Marker>
+                <MarcadorNumerado
+                  rotulo={posicaoNaRota[i] !== undefined ? posicaoNaRota[i] + 1 : i + 1}
+                  partida={i === 0}
+                />
+              </AdvancedMarker>
             ))}
             {rota && (
-              <Polyline
-                positions={rota.linha}
-                pathOptions={{ color: "#2563eb", weight: 5, opacity: 0.8 }}
-              />
+              <Polyline path={caminho} strokeColor="#2563eb" strokeWeight={5} strokeOpacity={0.8} />
             )}
-          </MapContainer>
+          </Map>
         </div>
 
         {erroRota && (
@@ -381,8 +409,7 @@ export default function Rotas() {
               {calculando && <Loader2 size={14} className="animate-spin" />}
               {rota && total && (
                 <span>
-                  {fmtKm(total.m)} · {fmtDuracao(total.d)} dirigindo · menor{" "}
-                  {rota.criterio === "distancia" ? "distância" : "tempo"} · {rota.algoritmo}
+                  {fmtKm(total.m)} · {fmtDuracao(total.d)} dirigindo · {rota.algoritmo}
                 </span>
               )}
             </div>
@@ -417,14 +444,6 @@ export default function Rotas() {
                       )}
                       {retorno && <span className="mr-1.5 text-neutral-400">Retorno:</span>}
                       {ponto.endereco}
-                      {ponto.aproximado && !retorno && (
-                        <span
-                          title="Número não cadastrado no mapa. Arraste o marcador até a porta para corrigir."
-                          className="ml-1.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold"
-                        >
-                          APROXIMADO
-                        </span>
-                      )}
                     </td>
                     <td className="px-3 py-2 text-right text-neutral-500 whitespace-nowrap">
                       {trecho ? `${fmtKm(trecho.distancia)} · ${fmtDuracao(trecho.duracao)}` : "—"}
