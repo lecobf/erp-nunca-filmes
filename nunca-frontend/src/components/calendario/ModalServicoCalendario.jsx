@@ -348,14 +348,14 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
 
             {form.tipo_servico === "Job" && (
               <label className="col-span-12 md:col-span-3 flex flex-col gap-1 text-xs font-medium text-neutral-600">
-                Valor Diária Cachê
+                {form.tipo_cobranca === "periodo" ? "Cachê por Período" : "Valor Diária Cachê"}
                 <CurrencyInput value={Number(form.valor_diaria_cache) || 0} className="w-full"
                   onChange={(val) => setForm({ ...form, valor_diaria_cache: val })} />
               </label>
             )}
 
             <label className={`${form.tipo_servico === "Job" ? "col-span-5" : "col-span-8"} flex flex-col gap-1 text-xs font-medium text-neutral-600`}>
-              Valor Diária Equipamentos
+              {form.tipo_cobranca === "periodo" ? "Equipamentos por Período" : "Valor Diária Equipamentos"}
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <CurrencyInput
