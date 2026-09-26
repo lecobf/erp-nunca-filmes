@@ -382,6 +382,10 @@ function PaginaRotas() {
   const [erroRota, setErroRota] = useState("");
   const idSeq = useRef(Date.now());
   const { partida, chegada, paradas } = roteiro;
+  // Na volta, partida e chegada trocam de papel na tela: o cliente vira a partida e a
+  // garagem a chegada. Os dados continuam guardados como "partida" (garagem) e "chegada" (cliente).
+  const papelVisivel = (papel) =>
+    sentido === "volta" && papel !== "parada" ? (papel === "partida" ? "chegada" : "partida") : papel;
 
   useEffect(() => {
     try {
@@ -410,9 +414,11 @@ function PaginaRotas() {
 
   // Aviso quando falta algo para calcular o sentido escolhido
   const faltando = !partida
-    ? "Defina o local de partida."
+    ? sentido === "volta"
+      ? "Defina o local de chegada (garagem)."
+      : "Defina o local de partida."
     : sentido === "volta" && !chegada
-      ? "Defina o local de chegada para calcular a volta."
+      ? "Defina o local de partida (cliente) para calcular a volta."
       : vertices.length < 2
         ? "Adicione endereços da equipe ou o local de chegada."
         : "";
@@ -540,7 +546,8 @@ function PaginaRotas() {
     linksMaps.forEach((l, i) => linhas.push(linksMaps.length > 1 ? `${i + 1}) ${l}` : l));
     linhas.push("");
     itinerario.forEach(({ v, pos, chegadaEm, saidaEm }) => {
-      const rotulo = v.papel === "partida" ? "PARTIDA" : v.papel === "chegada" ? "CHEGADA" : `${pos}.`;
+      const papel = papelVisivel(v.papel);
+      const rotulo = papel === "partida" ? "PARTIDA" : papel === "chegada" ? "CHEGADA" : `${pos}.`;
       const horas = [chegadaEm && `chega ${fmtHora(chegadaEm)}`, saidaEm && `sai ${fmtHora(saidaEm)}`].filter(Boolean).join(" / ");
       const quem = v.nome ? ` ${v.nome}${v.telefone ? ` · ${v.telefone}` : ""}` : "";
       linhas.push(`${rotulo}${quem} — ${horas}`);
@@ -595,24 +602,18 @@ function PaginaRotas() {
       <div className="page-body space-y-4">
         <div className="card p-4 space-y-4 print:hidden">
           <div className="grid gap-4 md:grid-cols-2">
-            <LocalFixo
-              titulo="Local de partida"
-              descricao="ex.: garagem"
-              papel="partida"
-              ponto={partida}
-              perto={perto}
-              onDefinir={(s) => definir("partida", s)}
-              onLimpar={() => setRoteiro((r) => ({ ...r, partida: null }))}
-            />
-            <LocalFixo
-              titulo="Local de chegada"
-              descricao="ex.: cliente"
-              papel="chegada"
-              ponto={chegada}
-              perto={perto}
-              onDefinir={(s) => definir("chegada", s)}
-              onLimpar={() => setRoteiro((r) => ({ ...r, chegada: null }))}
-            />
+            {(sentido === "volta" ? ["chegada", "partida"] : ["partida", "chegada"]).map((chave, i) => (
+              <LocalFixo
+                key={chave}
+                titulo={i === 0 ? "Local de partida" : "Local de chegada"}
+                descricao={chave === "partida" ? "ex.: garagem" : "ex.: cliente"}
+                papel={papelVisivel(chave)}
+                ponto={roteiro[chave]}
+                perto={perto}
+                onDefinir={(s) => definir(chave, s)}
+                onLimpar={() => setRoteiro((r) => ({ ...r, [chave]: null }))}
+              />
+            ))}
           </div>
 
           <div className="space-y-1">
@@ -628,8 +629,8 @@ function PaginaRotas() {
               Trajeto
               <div className="inline-flex rounded border border-neutral-300 overflow-hidden">
                 {[
-                  ["ida", "Ida: partida → chegada"],
-                  ["volta", "Volta: chegada → partida"],
+                  ["ida", "Ida"],
+                  ["volta", "Volta (inverte partida e chegada)"],
                 ].map(([valor, rotulo]) => (
                   <button
                     key={valor}
@@ -645,7 +646,7 @@ function PaginaRotas() {
               </div>
             </div>
             <label className="flex flex-col gap-1">
-              {sentido === "ida" ? "Chegar ao destino às" : "Sair do local de chegada às"}
+              {sentido === "ida" ? "Chegar ao destino às" : "Sair do local de partida às"}
               <input
                 type="time"
                 value={horarios[sentido]}
@@ -675,8 +676,14 @@ function PaginaRotas() {
                 onDragEnd={(e) => e.latLng && mover(v.id, [e.latLng.lat(), e.latLng.lng()])}
               >
                 <MarcadorNumerado
-                  papel={v.papel}
-                  rotulo={v.papel === "partida" ? "P" : v.papel === "chegada" ? "C" : (posicaoNaRota[v.id] ?? "•")}
+                  papel={papelVisivel(v.papel)}
+                  rotulo={
+                    papelVisivel(v.papel) === "partida"
+                      ? "P"
+                      : papelVisivel(v.papel) === "chegada"
+                        ? "C"
+                        : (posicaoNaRota[v.id] ?? "•")
+                  }
                 />
               </AdvancedMarker>
             ))}
@@ -784,12 +791,14 @@ function PaginaRotas() {
                   {itinerario.map(({ v, pos, trecho, chegadaEm, saidaEm }) => (
                     <tr key={v.id} className="border-t border-neutral-100 align-top">
                       <td className="px-3 py-2 font-semibold text-neutral-700">
-                        {v.papel === "parada" ? (pos ?? "•") : v.papel === "partida" ? "P" : "C"}
+                        {v.papel === "parada" ? (pos ?? "•") : papelVisivel(v.papel) === "partida" ? "P" : "C"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap quebra col-nome">
-                        {rotuloPapel[v.papel] ? (
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${classePapel[v.papel]}`}>
-                            {rotuloPapel[v.papel]}
+                        {rotuloPapel[papelVisivel(v.papel)] ? (
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${classePapel[papelVisivel(v.papel)]}`}
+                          >
+                            {rotuloPapel[papelVisivel(v.papel)]}
                           </span>
                         ) : (
                           <>
