@@ -4,7 +4,7 @@ import Modal from "../Modal";
 import CurrencyInput from "../CurrencyInput";
 import DateInput from "../DateInput";
 import { fmtBRL, fmtDateBR } from "../../utils/formatters";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import ModalEquipamentos from "../servicos/ModalEquipamentos";
 
 function DateChip({ date, onRemove }) {
@@ -16,6 +16,54 @@ function DateChip({ date, onRemove }) {
         onClick={() => onRemove(date)}>
         <X size={10} />
       </button>
+    </span>
+  );
+}
+
+// Agrupa datas consecutivas em runs. Retorna array de arrays:
+// cada sub-array com 1 elemento = data avulsa; com 2+ = período contínuo.
+function groupDates(sortedDates) {
+  if (!sortedDates.length) return [];
+  const groups = [];
+  let current = [sortedDates[0]];
+  for (let i = 1; i < sortedDates.length; i++) {
+    const prev = new Date(sortedDates[i - 1] + "T12:00:00");
+    const cur  = new Date(sortedDates[i]     + "T12:00:00");
+    if ((cur - prev) / 86400000 === 1) {
+      current.push(sortedDates[i]);
+    } else {
+      groups.push(current);
+      current = [sortedDates[i]];
+    }
+  }
+  groups.push(current);
+  return groups;
+}
+
+// Chip compacto para um período contínuo. Clicável para expandir/recolher.
+function RangeChip({ dates, onRemoveAll, onRemoveOne }) {
+  const [expanded, setExpanded] = useState(false);
+  const inicio = dates[0];
+  const fim    = dates[dates.length - 1];
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5">
+      <span className="inline-flex items-center gap-1 text-xs text-blue-700 font-medium whitespace-nowrap">
+        {fmtDateBR(inicio)} — {fmtDateBR(fim)}
+        <span className="text-blue-400 font-normal">· {dates.length}d</span>
+        <button type="button" tabIndex={-1} title={expanded ? "Recolher" : "Ver datas"}
+          className="text-blue-400 hover:text-blue-700 leading-none"
+          onClick={() => setExpanded((v) => !v)}>
+          {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+        </button>
+        <button type="button" tabIndex={-1} title="Remover período"
+          className="text-blue-300 hover:text-blue-700 leading-none ml-0.5"
+          onClick={onRemoveAll}>
+          <X size={10} />
+        </button>
+      </span>
+      {expanded && dates.map((d) => (
+        <DateChip key={d} date={d} onRemove={onRemoveOne} />
+      ))}
     </span>
   );
 }
@@ -323,11 +371,25 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
                 </button>
               </div>
 
-              {/* Chips de datas selecionadas + campo de data avulsa */}
-              <div className="flex flex-wrap items-center gap-1.5 min-h-[34px] border border-neutral-300 rounded px-2 py-1.5 bg-white">
-                {(form.datas || []).map((d) => (
-                  <DateChip key={d} date={d} onRemove={removerData} />
-                ))}
+              {/* Chips de datas — períodos contínuos exibidos compactamente, avulsas individualmente */}
+              <div className="flex flex-wrap items-start gap-1.5 min-h-[34px] border border-neutral-300 rounded px-2 py-1.5 bg-white">
+                {groupDates(form.datas || []).map((grupo) =>
+                  grupo.length >= 2 ? (
+                    <RangeChip
+                      key={grupo[0]}
+                      dates={grupo}
+                      onRemoveAll={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          datas: prev.datas.filter((d) => !grupo.includes(d)),
+                        }))
+                      }
+                      onRemoveOne={removerData}
+                    />
+                  ) : (
+                    <DateChip key={grupo[0]} date={grupo[0]} onRemove={removerData} />
+                  )
+                )}
                 <DateInput
                   value={novaData}
                   placeholder="+ data avulsa"
