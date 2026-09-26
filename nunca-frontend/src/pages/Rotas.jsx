@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { APIProvider, Map, AdvancedMarker, Polyline, useMap, useMapsLibrary } from "@vis.gl/react-google-maps";
-import { Trash2, Loader2, MapPin, AlertTriangle, Pencil } from "lucide-react";
+import { Trash2, Loader2, MapPin, AlertTriangle, Pencil, Copy, Check, Printer, Navigation } from "lucide-react";
 import { matrizDeCustos, tracarRota } from "../services/rotasApi";
 import { menorCaminho, verticesIsolados } from "../utils/rotas/grafo";
 
@@ -48,6 +48,44 @@ function fmtDuracao(s) {
 
 const latLng = ([lat, lng]) => ({ lat, lng });
 
+/* ── Links para abrir o roteiro no celular ─────────────────── */
+const coordTxt = ([lat, lng]) => `${lat.toFixed(6)},${lng.toFixed(6)}`;
+// O link do Google Maps aceita até 9 paradas intermediárias; roteiros maiores viram vários links encadeados.
+const MAX_PARADAS_LINK = 9;
+
+function linksGoogleMaps(coords) {
+  const links = [];
+  for (let i = 0; i < coords.length - 1; i += MAX_PARADAS_LINK + 1) {
+    const trecho = coords.slice(i, i + MAX_PARADAS_LINK + 2);
+    const params = new URLSearchParams({
+      api: "1",
+      origin: coordTxt(trecho[0]),
+      destination: coordTxt(trecho[trecho.length - 1]),
+      travelmode: "driving",
+    });
+    if (trecho.length > 2) params.set("waypoints", trecho.slice(1, -1).map(coordTxt).join("|"));
+    links.push(`https://www.google.com/maps/dir/?${params}`);
+  }
+  return links;
+}
+
+// O Waze só aceita um destino por link: um link por parada
+const linkWaze = (coords) => `https://waze.com/ul?ll=${coordTxt(coords)}&navigate=yes`;
+
+async function copiarTexto(texto) {
+  try {
+    await navigator.clipboard.writeText(texto);
+  } catch {
+    // navegadores sem Clipboard API (ou página sem HTTPS): cópia pelo método antigo
+    const area = document.createElement("textarea");
+    area.value = texto;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+}
+
 function MarcadorNumerado({ rotulo, papel }) {
   return (
     <div
@@ -70,15 +108,18 @@ function MarcadorNumerado({ rotulo, papel }) {
 }
 
 /* ── Enquadra o mapa nos pontos ───────────────────────────── */
-function AjustarMapa({ pontos }) {
+function AjustarMapa({ pontos, chave }) {
   const map = useMap();
   const core = useMapsLibrary("core");
   const qtdAnterior = useRef(-1);
+  const chaveAnterior = useRef(chave);
   useEffect(() => {
     if (!map || !core) return;
-    // só reenquadra quando entra/sai ponto; arrastar um marcador não mexe no zoom
-    if (pontos.length === qtdAnterior.current) return;
+    // só reenquadra quando entra/sai ponto ou muda a `chave` (ex.: preparar impressão);
+    // arrastar um marcador não mexe no zoom
+    if (pontos.length === qtdAnterior.current && chave === chaveAnterior.current) return;
     qtdAnterior.current = pontos.length;
+    chaveAnterior.current = chave;
     if (pontos.length === 1) {
       map.setCenter(latLng(pontos[0]));
       map.setZoom(16);
@@ -87,7 +128,7 @@ function AjustarMapa({ pontos }) {
       pontos.forEach((p) => limites.extend(latLng(p)));
       map.fitBounds(limites, 60);
     }
-  }, [map, core, pontos]);
+  }, [map, core, pontos, chave]);
   return null;
 }
 
@@ -482,6 +523,57 @@ function PaginaRotas() {
   const mover = (id, coords) => atualizar((p) => (p.id === id ? { ...p, coords } : p));
   const remover = (id) => atualizar((p) => (p.id === id ? null : p));
 
+  // ── Copiar roteiro (Google Maps com a rota inteira + Waze por parada) ──
+  const [copiado, setCopiado] = useState(false);
+  const linksMaps = useMemo(
+    () => (rota ? linksGoogleMaps(rota.ordem.map((i) => vertices[i].coords)) : []),
+    [rota, vertices]
+  );
+
+  function textoRoteiro() {
+    const titulo =
+      sentido === "ida"
+        ? `ROTEIRO — IDA (chegar às ${horarios.ida})\nMotorista sai às ${fmtHora(saidaMotorista)}`
+        : `ROTEIRO — VOLTA (saída às ${horarios.volta})`;
+    const linhas = [titulo, `${fmtKm(total.m)} · ${fmtDuracao(total.d)} dirigindo`, ""];
+    linhas.push(linksMaps.length > 1 ? "Google Maps (rota completa, em partes):" : "Google Maps (rota completa):");
+    linksMaps.forEach((l, i) => linhas.push(linksMaps.length > 1 ? `${i + 1}) ${l}` : l));
+    linhas.push("");
+    itinerario.forEach(({ v, pos, chegadaEm, saidaEm }) => {
+      const rotulo = v.papel === "partida" ? "PARTIDA" : v.papel === "chegada" ? "CHEGADA" : `${pos}.`;
+      const horas = [chegadaEm && `chega ${fmtHora(chegadaEm)}`, saidaEm && `sai ${fmtHora(saidaEm)}`].filter(Boolean).join(" / ");
+      const quem = v.nome ? ` ${v.nome}${v.telefone ? ` · ${v.telefone}` : ""}` : "";
+      linhas.push(`${rotulo}${quem} — ${horas}`);
+      linhas.push(`   ${v.endereco}`);
+      if (pos > 0) linhas.push(`   Waze: ${linkWaze(v.coords)}`);
+    });
+    return linhas.join("\n");
+  }
+
+  async function copiarRoteiro() {
+    await copiarTexto(textoRoteiro());
+    setCopiado(true);
+    setTimeout(() => setCopiado(false), 2500);
+  }
+
+  // ── Imprimir / PDF: ajusta o mapa à largura da folha A4 antes de abrir a impressão ──
+  const [imprimindo, setImprimindo] = useState(false);
+  useEffect(() => {
+    if (!imprimindo) return;
+    const tituloOriginal = document.title;
+    document.title = `Roteiro ${sentido} ${new Date().toLocaleDateString("pt-BR").replaceAll("/", "-")}`;
+    const fim = () => {
+      document.title = tituloOriginal;
+      setImprimindo(false);
+    };
+    window.addEventListener("afterprint", fim, { once: true });
+    const t = setTimeout(() => window.print(), 1500); // tempo para o mapa redesenhar no novo tamanho
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("afterprint", fim);
+    };
+  }, [imprimindo, sentido]);
+
   const rotuloPapel = { partida: "PARTIDA", chegada: "CHEGADA" };
   const classePapel = { partida: "bg-green-100 text-green-700", chegada: "bg-red-100 text-red-700" };
 
@@ -493,7 +585,7 @@ function PaginaRotas() {
           <button
             type="button"
             onClick={() => setRoteiro(ROTEIRO_VAZIO)}
-            className="text-xs text-neutral-500 hover:text-red-600"
+            className="text-xs text-neutral-500 hover:text-red-600 print:hidden"
           >
             Limpar tudo
           </button>
@@ -501,7 +593,7 @@ function PaginaRotas() {
       </div>
 
       <div className="page-body space-y-4">
-        <div className="card p-4 space-y-4">
+        <div className="card p-4 space-y-4 print:hidden">
           <div className="grid gap-4 md:grid-cols-2">
             <LocalFixo
               titulo="Local de partida"
@@ -563,16 +655,17 @@ function PaginaRotas() {
           </div>
         </div>
 
-        <div className="card overflow-hidden relative z-0">
+        <div className="card overflow-hidden relative z-0" style={imprimindo ? { width: 716 } : undefined}>
           <Map
             mapId={GOOGLE_MAP_ID}
+            renderingType="RASTER"
             defaultCenter={latLng(CENTRO_PADRAO)}
             defaultZoom={12}
             gestureHandling="greedy"
             streetViewControl={false}
-            style={{ height: 440 }}
+            style={{ height: imprimindo ? 520 : 440 }}
           >
-            <AjustarMapa pontos={coordsMapa} />
+            <AjustarMapa pontos={coordsMapa} chave={imprimindo} />
             {vertices.map((v) => (
               <AdvancedMarker
                 key={v.id}
@@ -593,7 +686,7 @@ function PaginaRotas() {
 
         {(erroRota || (faltando && vertices.length > 0)) && (
           <div
-            className={`flex items-start gap-2 text-xs rounded-md px-3 py-2 border ${
+            className={`print:hidden flex items-start gap-2 text-xs rounded-md px-3 py-2 border ${
               erroRota ? "text-red-700 bg-red-50 border-red-200" : "text-amber-700 bg-amber-50 border-amber-200"
             }`}
           >
@@ -614,12 +707,44 @@ function PaginaRotas() {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-3 text-xs text-neutral-500">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-500">
               {calculando && <Loader2 size={14} className="animate-spin" />}
               {rota && total && (
                 <span>
-                  {fmtKm(total.m)} · {fmtDuracao(total.d)} dirigindo · {rota.algoritmo}
+                  {fmtKm(total.m)} · {fmtDuracao(total.d)} dirigindo
+                  <span className="print:hidden"> · {rota.algoritmo}</span>
                 </span>
+              )}
+              {rota && (
+                <div className="flex items-center gap-2 print:hidden">
+                  <button
+                    type="button"
+                    onClick={copiarRoteiro}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50"
+                    title="Copia o roteiro com links do Google Maps e do Waze para colar no celular"
+                  >
+                    {copiado ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+                    {copiado ? "Copiado!" : "Copiar roteiro"}
+                  </button>
+                  <a
+                    href={linksMaps[0]}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50"
+                    title="Abrir a rota completa no Google Maps"
+                  >
+                    <Navigation size={14} /> Google Maps
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setImprimindo(true)}
+                    disabled={imprimindo}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+                    title="Imprimir ou salvar como PDF"
+                  >
+                    {imprimindo ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Imprimir / PDF
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -641,7 +766,7 @@ function PaginaRotas() {
                     <th className="px-3 py-2 text-right whitespace-nowrap">Trecho</th>
                     <th className="px-3 py-2 text-right whitespace-nowrap">Chega</th>
                     <th className="px-3 py-2 text-right whitespace-nowrap">Sai</th>
-                    <th className="px-3 py-2 w-8" />
+                    <th className="px-3 py-2 w-8 print:hidden" />
                   </tr>
                 </thead>
                 <tbody>
@@ -668,6 +793,7 @@ function PaginaRotas() {
                       </td>
                       <td className="px-3 py-2 text-neutral-700">{v.endereco}</td>
                       <td className="px-3 py-2 text-right">
+                        {v.papel === "parada" && <span className="hidden print:inline">{v.paradaMin || 0}</span>}
                         {v.papel === "parada" ? (
                           <input
                             type="number"
@@ -675,7 +801,7 @@ function PaginaRotas() {
                             step={5}
                             value={v.paradaMin || 0}
                             onChange={(e) => editarParada(v.id, { paradaMin: Math.max(0, Number(e.target.value) || 0) })}
-                            className="w-16 text-right"
+                            className="w-16 text-right print:hidden"
                             title="Minutos parado neste endereço"
                           />
                         ) : (
@@ -691,7 +817,7 @@ function PaginaRotas() {
                       <td className="px-3 py-2 text-right font-medium text-neutral-800 whitespace-nowrap">
                         {saidaEm ? fmtHora(saidaEm) : "—"}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 print:hidden">
                         <button
                           type="button"
                           title="Remover"

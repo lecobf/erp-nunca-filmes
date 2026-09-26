@@ -239,9 +239,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-slate-50 print:bg-white">
       {/* ── Sidebar desktop (lg+) ─────────────────────────── */}
-      <aside className="hidden lg:flex flex-col w-56 bg-zinc-900 text-zinc-100 shrink-0 fixed inset-y-0 left-0 z-30">
+      <aside className="print:hidden hidden lg:flex flex-col w-56 bg-zinc-900 text-zinc-100 shrink-0 fixed inset-y-0 left-0 z-30">
         {/* Cabeçalho com engrenagem */}
         <div className="flex items-center gap-2.5 px-4 py-4 border-b border-zinc-700/60">
           <button
@@ -280,9 +280,9 @@ export default function App() {
       </aside>
 
       {/* ── Conteúdo principal ────────────────────────────── */}
-      <div className="flex flex-col flex-1 min-w-0 lg:ml-56">
+      <div className="flex flex-col flex-1 min-w-0 lg:ml-56 print:ml-0">
         {/* Header mobile */}
-        <header className="lg:hidden sticky top-0 z-20 bg-zinc-900 px-4 py-3 flex items-center justify-between shadow">
+        <header className="print:hidden lg:hidden sticky top-0 z-20 bg-zinc-900 px-4 py-3 flex items-center justify-between shadow">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPerfilAberto(true)}
@@ -301,7 +301,7 @@ export default function App() {
           </button>
         </header>
 
-        <main className="flex-1 overflow-x-hidden pb-16 lg:pb-0">
+        <main className="flex-1 overflow-x-hidden pb-16 lg:pb-0 print:pb-0">
           <div className="max-w-7xl mx-auto">
             <Outlet />
           </div>
@@ -309,7 +309,7 @@ export default function App() {
       </div>
 
       {/* ── Bottom nav mobile (< lg) ─────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-neutral-200 flex h-14">
+      <nav className="print:hidden lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-neutral-200 flex h-14">
         {NAV_ITEMS.map((item) => (
           <BottomNavLink key={item.to} {...item} />
         ))}
