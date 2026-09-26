@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import IconButton from "../components/IconButton";
 import { ChevronLeft, ChevronRight } from "lucide-react";
