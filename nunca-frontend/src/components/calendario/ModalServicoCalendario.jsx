@@ -35,6 +35,7 @@ const formVazio = (dataInicial) => ({
   status: "pendente",
   equipamentos: [],
   is_pacote: false,
+  tipo_cobranca: "diaria",  // "diaria" ou "periodo"
 });
 
 /**
@@ -54,6 +55,8 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
   const [clientes, setClientes] = useState([]);
   const [form, setForm] = useState(formVazio(dataInicial));
   const [novaData, setNovaData] = useState("");
+  const [periodoInicio, setPeriodoInicio] = useState("");
+  const [periodoFim, setPeriodoFim] = useState("");
   const [modalEquipOpen, setModalEquipOpen] = useState(false);
   const [orcamentoAberto, setOrcamentoAberto] = useState(false);
   const [carregando, setCarregando] = useState(false);
@@ -66,6 +69,8 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
   useEffect(() => {
     if (!isOpen) return;
     setNovaData("");
+    setPeriodoInicio("");
+    setPeriodoFim("");
     if (modoEdicao) {
       setCarregando(true);
       api.get(`/servicos/${servicoId}`)
@@ -87,6 +92,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
             equipamentos: Array.isArray(s.equipamentos) ? s.equipamentos : [],
             status: s.status || "pendente",
             is_pacote: !!s.is_pacote,
+            tipo_cobranca: s.tipo_cobranca || "diaria",
           });
         })
         .finally(() => setCarregando(false));
@@ -96,17 +102,22 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, servicoId, dataInicial]);
 
-  // Recalcula totais sempre que mudar cachê, equipamentos, datas ou desconto
+  // Recalcula totais sempre que mudar cachê, equipamentos, datas, desconto ou tipo de cobrança
   useEffect(() => {
     const nDiarias = (form.datas || []).length || 1;
-    const total = (Number(form.valor_diaria_cache) + Number(form.valor_diaria_equipamentos)) * nDiarias;
+    const cache = Number(form.valor_diaria_cache) || 0;
+    const equip = Number(form.valor_diaria_equipamentos) || 0;
+    // "diaria": multiplica pelo número de diárias; "periodo": valor único pelo período
+    const total = form.tipo_cobranca === "periodo"
+      ? cache + equip
+      : (cache + equip) * nDiarias;
     setForm((prev) => ({
       ...prev,
       valor_total: total,
       valor_final: Math.max(0, total - Number(prev.valor_desconto || 0)),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.valor_diaria_cache, form.valor_diaria_equipamentos, form.datas?.length, form.valor_desconto]);
+  }, [form.valor_diaria_cache, form.valor_diaria_equipamentos, form.datas?.length, form.valor_desconto, form.tipo_cobranca]);
 
   function adicionarData(d) {
     if (!d) return;
@@ -120,6 +131,34 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
 
   function removerData(d) {
     setForm((prev) => ({ ...prev, datas: (prev.datas || []).filter((x) => x !== d) }));
+  }
+
+  // Gera todas as datas entre início e fim (inclusive), usando meio-dia para evitar problemas de DST
+  function datasNoPeriodo(inicio, fim) {
+    const lista = [];
+    const cur = new Date(inicio + "T12:00:00");
+    const end = new Date(fim + "T12:00:00");
+    while (cur <= end) {
+      lista.push(cur.toISOString().split("T")[0]);
+      cur.setDate(cur.getDate() + 1);
+    }
+    return lista;
+  }
+
+  function adicionarPeriodo() {
+    if (!periodoInicio || !periodoFim) return;
+    if (periodoFim < periodoInicio) {
+      alert("A data final deve ser igual ou posterior à data inicial.");
+      return;
+    }
+    const novas = datasNoPeriodo(periodoInicio, periodoFim);
+    setForm((prev) => {
+      const existentes = new Set(prev.datas || []);
+      novas.forEach((d) => existentes.add(d));
+      return { ...prev, datas: [...existentes].sort() };
+    });
+    setPeriodoInicio("");
+    setPeriodoFim("");
   }
 
   function calcTotalEquip(lista) {
@@ -154,8 +193,9 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
           quantidade: Number(e.quantidade ?? e.qtd ?? 1) || 1,
         }))
         .filter((e) => e.equipamento_id != null);
-      if (!form.is_pacote && mappedEquipamentos.length === 0) {
-        alert("Selecione ao menos um equipamento ou marque 'É pacote'.");
+      // Pacote marcado exige valor preenchido; sem pacote, equipamentos são opcionais
+      if (form.is_pacote && !(Number(form.valor_diaria_equipamentos) > 0)) {
+        alert("Informe o valor de equipamentos para o pacote.");
         return;
       }
       const payload = {
@@ -169,6 +209,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
         data_previsao_pagamento: form.data_previsao_pagamento || null,
         status: form.status || "pendente",
         is_pacote: !!form.is_pacote,
+        tipo_cobranca: form.tipo_cobranca || "diaria",
         equipamentos: form.is_pacote ? [] : mappedEquipamentos,
       };
       if (modoEdicao) {
@@ -217,7 +258,34 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
               </select>
             </label>
 
-            <label className="col-span-12 md:col-span-6 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            {/* Tipo de cobrança: por diária ou por período */}
+            <div className="col-span-12 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+              Cobrança
+              <div className="flex items-center gap-4 h-8">
+                <label className="flex items-center gap-1.5 cursor-pointer font-normal">
+                  <input
+                    type="radio"
+                    name="tipo_cobranca"
+                    value="diaria"
+                    checked={form.tipo_cobranca === "diaria"}
+                    onChange={() => setForm((prev) => ({ ...prev, tipo_cobranca: "diaria" }))}
+                  />
+                  Por diária
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer font-normal">
+                  <input
+                    type="radio"
+                    name="tipo_cobranca"
+                    value="periodo"
+                    checked={form.tipo_cobranca === "periodo"}
+                    onChange={() => setForm((prev) => ({ ...prev, tipo_cobranca: "periodo" }))}
+                  />
+                  Por período
+                </label>
+              </div>
+            </div>
+
+            <label className="col-span-12 md:col-span-5 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Cliente
               <select value={form.cliente_id || ""} className="w-full"
                 onChange={(e) => setForm({ ...form, cliente_id: e.target.value })}>
@@ -226,15 +294,45 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
               </select>
             </label>
 
-            <div className="col-span-12 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            <div className="col-span-12 flex flex-col gap-2 text-xs font-medium text-neutral-600">
               Datas de Trabalho *
+
+              {/* Seleção por período */}
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-0.5">
+                  De
+                  <DateInput
+                    value={periodoInicio}
+                    onChange={setPeriodoInicio}
+                    className="min-w-[130px]"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  Até
+                  <DateInput
+                    value={periodoFim}
+                    onChange={setPeriodoFim}
+                    className="min-w-[130px]"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={adicionarPeriodo}
+                  disabled={!periodoInicio || !periodoFim}
+                  className="btn-secondary h-8 px-3 text-xs whitespace-nowrap disabled:opacity-40"
+                >
+                  + Adicionar período
+                </button>
+              </div>
+
+              {/* Chips de datas selecionadas + campo de data avulsa */}
               <div className="flex flex-wrap items-center gap-1.5 min-h-[34px] border border-neutral-300 rounded px-2 py-1.5 bg-white">
                 {(form.datas || []).map((d) => (
                   <DateChip key={d} date={d} onRemove={removerData} />
                 ))}
                 <DateInput
                   value={novaData}
-                  placeholder="+ adicionar data"
+                  placeholder="+ data avulsa"
                   className="min-w-[130px] border-dashed text-neutral-400"
                   onChange={(d) => { if (d) adicionarData(d); setNovaData(""); }}
                 />

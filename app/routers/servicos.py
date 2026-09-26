@@ -32,6 +32,7 @@ def _aplicar_regras_e_calcular(
     valor_diaria_cache: float,
     valor_diaria_equipamentos: float,
     equipamentos_in: list[ServicoEquipamentoIn] | None,
+    tipo_cobranca: str = "diaria",
 ) -> tuple[float, float, list[ServicoEquipamento]]:
     itens_obj: list[ServicoEquipamento] = []
     valor_diaria_equipamentos_calc = float(valor_diaria_equipamentos or 0.0)
@@ -67,9 +68,14 @@ def _aplicar_regras_e_calcular(
     else:
         raise HTTPException(status_code=400, detail="tipo_servico deve ser 'Job' ou 'Aluguel'.")
 
-    valor_total = (float(valor_diaria_cache or 0.0) * numero_diarias) + (
-        valor_diaria_equipamentos_calc * numero_diarias
-    )
+    # "diaria": multiplica cada componente pelo número de diárias
+    # "periodo": valor único para o período inteiro, sem multiplicação
+    if (tipo_cobranca or "diaria") == "periodo":
+        valor_total = float(valor_diaria_cache or 0.0) + valor_diaria_equipamentos_calc
+    else:
+        valor_total = (float(valor_diaria_cache or 0.0) * numero_diarias) + (
+            valor_diaria_equipamentos_calc * numero_diarias
+        )
     return valor_diaria_equipamentos_calc, valor_total, itens_obj
 
 
@@ -171,6 +177,7 @@ def listar_servicos(
                 "valor_a_receber": valor_a_receber,
                 "lucro_liquido": lucro_liquido,
                 "is_pacote": s.is_pacote,
+                "tipo_cobranca": s.tipo_cobranca,
                 "valor_pendente_atual": s.valor_pendente_atual,
                 "data_ultimo_pagamento": data_ultimo_pagamento,
             }
@@ -197,6 +204,7 @@ def criar_servico(
         payload.valor_diaria_cache,
         payload.valor_diaria_equipamentos,
         payload.equipamentos or [],
+        tipo_cobranca=payload.tipo_cobranca,
     )
     valor_final = max(valor_total - (payload.valor_desconto or 0.0), 0.0)
     s = Servico(
@@ -212,6 +220,7 @@ def criar_servico(
         data_previsao_pagamento=data_prev,
         status="pendente",
         is_pacote=payload.is_pacote,
+        tipo_cobranca=payload.tipo_cobranca,
         valor_pendente_atual=valor_final,
         usuario_id=current_user_id,
     )
@@ -245,6 +254,7 @@ def criar_servico(
         "status": s.status,
         "valor_pendente_atual": s.valor_pendente_atual,
         "is_pacote": s.is_pacote,
+        "tipo_cobranca": s.tipo_cobranca,
     }
 
 
@@ -271,6 +281,7 @@ def atualizar_servico(
         payload.valor_diaria_cache,
         payload.valor_diaria_equipamentos,
         payload.equipamentos or [],
+        tipo_cobranca=payload.tipo_cobranca,
     )
     s.data_contratacao = data_contratacao
     s.tipo_servico = payload.tipo_servico
@@ -283,6 +294,7 @@ def atualizar_servico(
     s.valor_final = max(valor_total - s.valor_desconto, 0.0)
     s.data_previsao_pagamento = payload.data_previsao_pagamento or _default_previsao_pagamento(data_contratacao)
     s.is_pacote = payload.is_pacote
+    s.tipo_cobranca = payload.tipo_cobranca
 
     if payload.equipamentos is not None:
         db.query(ServicoEquipamento).filter(ServicoEquipamento.servico_id == s.id).delete()
@@ -312,6 +324,7 @@ def atualizar_servico(
         "status": s.status,
         "valor_pendente_atual": s.valor_pendente_atual,
         "is_pacote": s.is_pacote,
+        "tipo_cobranca": s.tipo_cobranca,
     }
 
 
@@ -549,4 +562,5 @@ def obter_servico(
         "status": s.status,
         "equipamentos": equipamentos,
         "is_pacote": s.is_pacote,
+        "tipo_cobranca": s.tipo_cobranca,
     }

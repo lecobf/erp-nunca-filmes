@@ -25,6 +25,8 @@ class Servico(Base):
     valor_pendente_atual = Column(Float, default=0.0)
 
     is_pacote = Column(Boolean, nullable=False, default=False)
+    # "diaria" = (cache + equip) × nDiarias  |  "periodo" = cache + equip (valor único pelo período)
+    tipo_cobranca = Column(String, nullable=False, default="diaria")
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
     cliente = relationship("Cliente", back_populates="servicos")
