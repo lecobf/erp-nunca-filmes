@@ -4,6 +4,15 @@ from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Carrega variáveis dos arquivos da raiz do projeto ANTES de importar os routers
+# (o banco é configurado na importação). Não sobrescreve o que já está no
+# ambiente — em produção o systemd já carrega o .env.
+RAIZ_PROJETO = Path(__file__).resolve().parent.parent
+load_dotenv(RAIZ_PROJETO / ".env")
+load_dotenv(RAIZ_PROJETO / ".env.google.local")  # chave do Google Maps (fora do git)
 
 # Importa os routers
 from app.routers.clientes import router as clientes_router
@@ -13,6 +22,7 @@ from app.routers.custos import router as custos_router
 from app.routers.equipamentos import router as equipamentos_router
 from app.routers.dashboard import router as dashboard_router
 from app.routers.auth import router as auth_router
+from app.routers.rotas import router as rotas_router
 
 # Importa modelos e banco
 from app.core.db import engine, SessionLocal
@@ -95,6 +105,7 @@ app.include_router(pagamentos_router)
 app.include_router(custos_router)
 app.include_router(equipamentos_router)
 app.include_router(dashboard_router)
+app.include_router(rotas_router)
 
 # ============================================================
 # 🔹 Healthcheck simples

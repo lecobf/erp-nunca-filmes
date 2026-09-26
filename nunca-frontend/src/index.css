@@ -208,3 +208,60 @@
     @apply p-4 md:p-5;
   }
 }
+
+/* ----------------------------------------------------------------
+   Impressão (ex.: roteiro da página Rotas → "Salvar como PDF")
+---------------------------------------------------------------- */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page-body {
+    padding: 0 !important;
+  }
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #e5e5e5;
+  }
+  tr {
+    break-inside: avoid;
+  }
+  /* Tabela do roteiro: sem rolagem (que corta na impressão), fonte e espaçamento
+     compactos e quebra de linha nos textos longos para caber na largura A4 */
+  .roteiro-tabela-area {
+    overflow: visible !important;
+  }
+  .roteiro-tabela {
+    font-size: 9.5px;
+    table-layout: auto;
+  }
+  .roteiro-tabela th,
+  .roteiro-tabela td {
+    padding: 4px 5px !important;
+    white-space: nowrap !important;
+  }
+  .roteiro-tabela th {
+    white-space: normal !important;
+  }
+  /* só nome e endereço quebram linha (entre palavras); horários, minutos e links ficam inteiros */
+  .roteiro-tabela .quebra {
+    white-space: normal !important;
+    overflow-wrap: break-word;
+  }
+  .roteiro-tabela .col-nome {
+    width: 22%;
+    min-width: 95px;
+  }
+  .roteiro-tabela .col-endereco {
+    width: auto;
+  }
+  .roteiro-tabela input {
+    display: none;
+  }
+}

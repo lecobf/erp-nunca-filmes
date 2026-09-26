@@ -37,8 +37,7 @@ def get_database_url() -> str:
     Retorna uma URL válida para o banco de dados.
     Adiciona sslmode=require quando necessário.
     """
-    url = os.getenv("DATABASE_URL")
-    url = url.strip()
+    url = (os.getenv("DATABASE_URL") or "").strip()
 
     if not url:
         print(f"{Colors.YELLOW}[WARN]{Colors.RESET} DATABASE_URL não encontrada. Usando SQLite local.")
