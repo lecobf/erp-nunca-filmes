@@ -274,7 +274,9 @@ function PaginaRotas() {
   // partida e chegada são fixas; só a ordem das paradas (equipe) é otimizada
   const [roteiro, setRoteiro] = useState(lerRoteiroSalvo);
   const [sentido, setSentido] = useState("ida"); // "ida": partida → paradas → chegada | "volta": o inverso
-  const [horaSaida, setHoraSaida] = useState(() => ({ ida: horaAtual(), volta: horaAtual() }));
+  // ida: hora em que é preciso CHEGAR ao destino final (a saída é calculada de trás para frente)
+  // volta: hora de SAÍDA do local de chegada (ex.: fim da diária)
+  const [horarios, setHorarios] = useState(() => ({ ida: horaAtual(), volta: horaAtual() }));
   const [paradaMin, setParadaMin] = useState(0);
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
@@ -355,12 +357,24 @@ function PaginaRotas() {
   // descarta resultado calculado para vértices ou sentido que já mudaram
   const rota = resultado?.vertices === vertices && resultado.sentido === sentido ? resultado : null;
 
+  // Horário de saída do motorista: na ida, calculado a partir da hora de chegada desejada
+  // (tempo dirigindo + paradas da equipe antes do destino), arredondado para baixo
+  // para nunca chegar atrasado; na volta, é a própria hora informada.
+  const saidaMotorista = useMemo(() => {
+    if (!rota) return null;
+    const [h, m] = horarios[sentido].split(":").map(Number);
+    const referencia = new Date();
+    referencia.setHours(h || 0, m || 0, 0, 0);
+    if (sentido === "volta") return referencia;
+    const paradasAntes = rota.ordem.slice(0, -1).filter((i) => vertices[i].papel === "parada").length;
+    const totalMs = rota.trechos.reduce((acc, t) => acc + t.duracao, 0) * 1000 + paradasAntes * paradaMin * 60000;
+    return new Date(Math.floor((referencia.getTime() - totalMs) / 60000) * 60000);
+  }, [rota, vertices, horarios, sentido, paradaMin]);
+
   // Horário estimado de chegada em cada ponto; o tempo de parada só conta nas paradas da equipe
   const itinerario = useMemo(() => {
-    if (!rota) return vertices.map((v) => ({ v }));
-    const [h, m] = horaSaida[sentido].split(":").map(Number);
-    const relogio = new Date();
-    relogio.setHours(h || 0, m || 0, 0, 0);
+    if (!rota || !saidaMotorista) return vertices.map((v) => ({ v }));
+    const relogio = new Date(saidaMotorista);
     return rota.ordem.map((idx, pos) => {
       const v = vertices[idx];
       const trecho = pos > 0 ? rota.trechos[pos - 1] : null;
@@ -369,7 +383,7 @@ function PaginaRotas() {
       if (v.papel === "parada") relogio.setTime(relogio.getTime() + paradaMin * 60000);
       return { v, pos, trecho, chegadaEm };
     });
-  }, [rota, vertices, horaSaida, sentido, paradaMin]);
+  }, [rota, vertices, saidaMotorista, paradaMin]);
 
   const posicaoNaRota = useMemo(() => {
     const mapa = {};
@@ -466,11 +480,11 @@ function PaginaRotas() {
               </div>
             </div>
             <label className="flex flex-col gap-1">
-              Saída {sentido === "ida" ? "da partida" : "da chegada"} às
+              {sentido === "ida" ? "Chegar ao destino às" : "Sair do local de chegada às"}
               <input
                 type="time"
-                value={horaSaida[sentido]}
-                onChange={(e) => setHoraSaida((h) => ({ ...h, [sentido]: e.target.value }))}
+                value={horarios[sentido]}
+                onChange={(e) => setHorarios((h) => ({ ...h, [sentido]: e.target.value }))}
               />
             </label>
             <label className="flex flex-col gap-1">
@@ -528,9 +542,16 @@ function PaginaRotas() {
 
         <div className="card">
           <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-neutral-100">
-            <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">
-              Roteiro — {sentido === "ida" ? "ida" : "volta"}
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                Roteiro — {sentido === "ida" ? "ida" : "volta"}
+              </p>
+              {sentido === "ida" && saidaMotorista && (
+                <span className="px-2 py-1 rounded bg-primary-50 text-primary-700 text-xs font-semibold">
+                  Motorista sai às {fmtHora(saidaMotorista)} para chegar às {horarios.ida}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-3 text-xs text-neutral-500">
               {calculando && <Loader2 size={14} className="animate-spin" />}
               {rota && total && (
