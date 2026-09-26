@@ -152,8 +152,9 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
           quantidade: Number(e.quantidade ?? e.qtd ?? 1) || 1,
         }))
         .filter((e) => e.equipamento_id != null);
-      if (!form.is_pacote && mappedEquipamentos.length === 0) {
-        alert("Selecione ao menos um equipamento ou marque 'É pacote'.");
+      // Pacote marcado exige valor preenchido; sem pacote, equipamentos são opcionais
+      if (form.is_pacote && !(Number(form.valor_diaria_equipamentos) > 0)) {
+        alert("Informe o valor de equipamentos para o pacote.");
         return;
       }
       const payload = {
