@@ -133,6 +133,11 @@ function AjustarMapa({ pontos, chave }) {
 }
 
 /* ── Campo de endereço com autocomplete (Google Places) ───── */
+// Cada consulta de sugestões é cobrada pelo Google: só começa a sugerir com
+// MIN_LETRAS digitadas e depois de ESPERA_MS sem digitar.
+const MIN_LETRAS = 5;
+const ESPERA_MS = 500;
+
 function BuscaEndereco({ perto, onSelecionar, placeholder = "Digite um endereço (rua, número, cidade)…" }) {
   const places = useMapsLibrary("places");
   const [texto, setTexto] = useState("");
@@ -144,7 +149,7 @@ function BuscaEndereco({ perto, onSelecionar, placeholder = "Digite um endereço
   const consulta = useRef(0); // descarta respostas de buscas antigas
 
   useEffect(() => {
-    if (!places || texto.trim().length < 3) {
+    if (!places || texto.trim().length < MIN_LETRAS) {
       setSugestoes([]);
       return;
     }
@@ -174,7 +179,7 @@ function BuscaEndereco({ perto, onSelecionar, placeholder = "Digite um endereço
       } finally {
         if (minha === consulta.current) setCarregando(false);
       }
-    }, 300);
+    }, ESPERA_MS);
     return () => clearTimeout(t);
   }, [texto, perto, places]);
 
@@ -379,7 +384,7 @@ function PaginaRotas() {
   const [horarios, setHorarios] = useState(() => ({ ida: horaAtual(), volta: horaAtual() }));
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
-  const [erroRota, setErroRota] = useState("");
+  const [erroRota, setErroRota] = useState(null); // { mensagem, assinatura, sentido }
   const idSeq = useRef(Date.now());
   const { partida, chegada, paradas } = roteiro;
   // Na volta, partida e chegada trocam de papel na tela: o cliente vira a partida e a
@@ -410,7 +415,6 @@ function PaginaRotas() {
   const assinatura = vertices.map((v) => `${v.id}:${v.coords.join(",")}`).join("|");
   const verticesRef = useRef(vertices);
   verticesRef.current = vertices;
-  const temChegada = Boolean(chegada);
 
   // Aviso quando falta algo para calcular o sentido escolhido
   const faltando = !partida
@@ -423,27 +427,32 @@ function PaginaRotas() {
         ? "Adicione endereços da equipe ou o local de chegada."
         : "";
 
-  // Recalcula o menor caminho sempre que os vértices ou o sentido mudam
+  // O cálculo só roda sob demanda (botão "Calcular menor rota"), não a cada endereço
+  // incluído: economiza consultas ao Google durante o preenchimento.
+  const [pedido, setPedido] = useState(null); // { assinatura, sentido } do último cálculo pedido
+  const calcular = () => setPedido({ assinatura, sentido });
+
+  // Alternar ida/volta depois de já ter calculado estes mesmos endereços recalcula
+  // sozinho: os tempos entre os pontos já estão em cache, só falta o trajeto.
   useEffect(() => {
-    if (faltando) {
-      setResultado(null);
-      setErroRota("");
-      setCalculando(false);
-      return;
-    }
+    setPedido((p) => (p && p.assinatura === assinatura && p.sentido !== sentido ? { assinatura, sentido } : p));
+  }, [assinatura, sentido]);
+
+  useEffect(() => {
+    if (!pedido) return;
     let cancelado = false;
     (async () => {
       setCalculando(true);
-      setErroRota("");
+      setErroRota(null);
       try {
         const vertices = verticesRef.current;
         const coords = vertices.map((v) => v.coords);
         const iPartida = 0;
-        const iChegada = temChegada ? vertices.length - 1 : null;
+        const iChegada = vertices[vertices.length - 1]?.papel === "chegada" ? vertices.length - 1 : null;
         const matriz = await matrizDeCustos(coords);
         const pesos = matriz.durations;
         const extremos =
-          sentido === "ida" ? { origem: iPartida, destino: iChegada } : { origem: iChegada, destino: iPartida };
+          pedido.sentido === "ida" ? { origem: iPartida, destino: iChegada } : { origem: iChegada, destino: iPartida };
         const { ordem, algoritmo } = menorCaminho(pesos, extremos);
         if (!ordem) {
           const isolados = verticesIsolados(pesos).map((i) => vertices[i].endereco);
@@ -454,21 +463,32 @@ function PaginaRotas() {
         }
         const trajeto = await tracarRota(ordem.map((i) => coords[i]));
         if (cancelado) return;
-        setResultado({ assinatura, sentido, ordem, algoritmo, ...trajeto });
+        setResultado({ assinatura: pedido.assinatura, sentido: pedido.sentido, ordem, algoritmo, ...trajeto });
       } catch (e) {
         if (cancelado) return;
         setResultado(null);
-        setErroRota(e.message);
+        setErroRota({ mensagem: e.message, assinatura: pedido.assinatura, sentido: pedido.sentido });
       }
       setCalculando(false);
     })();
     return () => {
       cancelado = true;
     };
-  }, [assinatura, sentido, temChegada, faltando]);
+  }, [pedido]);
 
   // descarta resultado calculado para vértices ou sentido que já mudaram
   const rota = resultado?.assinatura === assinatura && resultado.sentido === sentido ? resultado : null;
+
+  const erroAtual = erroRota?.assinatura === assinatura && erroRota.sentido === sentido ? erroRota.mensagem : "";
+  const aviso = erroAtual
+    ? { tipo: "erro", texto: erroAtual }
+    : vertices.length === 0 || calculando || rota
+      ? null
+      : faltando
+        ? { tipo: "alerta", texto: faltando }
+        : resultado
+          ? { tipo: "alerta", texto: "Os endereços mudaram desde o último cálculo. Clique em Calcular menor rota." }
+          : { tipo: "info", texto: "Quando terminar de incluir os endereços, clique em Calcular menor rota." };
 
   // Horário de saída do motorista: na ida, calculado a partir da hora de chegada desejada
   // (tempo dirigindo + paradas da equipe antes do destino), arredondado para baixo
@@ -653,6 +673,16 @@ function PaginaRotas() {
                 onChange={(e) => setHorarios((h) => ({ ...h, [sentido]: e.target.value }))}
               />
             </label>
+            <button
+              type="button"
+              onClick={calcular}
+              disabled={Boolean(faltando) || calculando}
+              className="btn-primary ml-auto inline-flex items-center gap-1.5 disabled:opacity-40"
+              title={faltando || "Calcula a ordem de menor tempo e o trajeto"}
+            >
+              {calculando && <Loader2 size={14} className="animate-spin" />}
+              Calcular menor rota
+            </button>
           </div>
         </div>
 
@@ -691,14 +721,18 @@ function PaginaRotas() {
           </Map>
         </div>
 
-        {(erroRota || (faltando && vertices.length > 0)) && (
+        {aviso && (
           <div
             className={`print:hidden flex items-start gap-2 text-xs rounded-md px-3 py-2 border ${
-              erroRota ? "text-red-700 bg-red-50 border-red-200" : "text-amber-700 bg-amber-50 border-amber-200"
+              aviso.tipo === "erro"
+                ? "text-red-700 bg-red-50 border-red-200"
+                : aviso.tipo === "alerta"
+                  ? "text-amber-700 bg-amber-50 border-amber-200"
+                  : "text-primary-700 bg-primary-50 border-primary-200"
             }`}
           >
             <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-            {erroRota || faltando}
+            {aviso.texto}
           </div>
         )}
 

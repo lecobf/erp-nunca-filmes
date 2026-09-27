@@ -35,18 +35,47 @@ async function chamarBackend(caminho, corpo) {
 }
 
 /**
- * Arestas já consultadas nesta sessão: "lat,lon>lat,lon" → { duracao, distancia } | null.
- * Só em memória (some ao recarregar a página). Adicionar um endereço custa só as
- * arestas que o envolvem, em vez da matriz inteira de novo.
+ * Arestas já consultadas: "lat,lon>lat,lon" → { v: { duracao, distancia } | null, t: obtidoEm }.
+ * Guardadas no navegador por até 30 dias (limite dos termos do Google para dados
+ * obtidos das APIs), então recalcular um roteiro já calculado — inclusive depois de
+ * recarregar a página — não consulta o Google de novo. Incluir um endereço custa só
+ * as arestas que o envolvem.
  */
+const STORAGE_ARESTAS = "rotas.arestas";
+const VALIDADE_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_ARESTAS = 5000; // limita o espaço ocupado no navegador (~0,5 MB)
+
 const cacheArestas = new Map();
 const chavePonto = ([lat, lon]) => `${lat.toFixed(6)},${lon.toFixed(6)}`;
 const chaveAresta = (a, b) => `${chavePonto(a)}>${chavePonto(b)}`;
 
+(function carregarCacheSalvo() {
+  try {
+    const salvo = JSON.parse(localStorage.getItem(STORAGE_ARESTAS)) || {};
+    const agora = Date.now();
+    for (const [chave, item] of Object.entries(salvo)) {
+      if (item && agora - item.t < VALIDADE_MS) cacheArestas.set(chave, item);
+    }
+  } catch {
+    /* armazenamento indisponível ou corrompido: começa vazio */
+  }
+})();
+
+function salvarCache() {
+  try {
+    const recentes = [...cacheArestas.entries()].sort((a, b) => b[1].t - a[1].t).slice(0, MAX_ARESTAS);
+    localStorage.setItem(STORAGE_ARESTAS, JSON.stringify(Object.fromEntries(recentes)));
+  } catch {
+    /* sem espaço ou sem acesso: segue só em memória */
+  }
+}
+
 async function consultarArestas(origens, destinos) {
   if (!origens.length || !destinos.length) return;
   const matriz = await chamarBackend("/rotas/matriz", { origens, destinos });
-  origens.forEach((o, i) => destinos.forEach((d, j) => cacheArestas.set(chaveAresta(o, d), matriz[i][j])));
+  const t = Date.now();
+  origens.forEach((o, i) => destinos.forEach((d, j) => cacheArestas.set(chaveAresta(o, d), { v: matriz[i][j], t })));
+  salvarCache();
 }
 
 /**
@@ -65,7 +94,8 @@ export async function matrizDeCustos(pontos) {
   await consultarArestas(novos, pontos); // novos → todos
   await consultarArestas(conhecidos, novos); // conhecidos → novos
 
-  const aresta = (a, b) => (chavePonto(a) === chavePonto(b) ? { duracao: 0, distancia: 0 } : cacheArestas.get(chaveAresta(a, b)));
+  const aresta = (a, b) =>
+    chavePonto(a) === chavePonto(b) ? { duracao: 0, distancia: 0 } : cacheArestas.get(chaveAresta(a, b))?.v;
   const valor = (a, b, campo) => aresta(a, b)?.[campo] ?? Infinity;
   return {
     durations: pontos.map((a) => pontos.map((b) => valor(a, b, "duracao"))),
@@ -102,7 +132,13 @@ function decodificarPolyline(str) {
  * Trajeto pelas ruas, respeitando a mão de direção, passando pelos pontos na ordem dada.
  * Retorna a linha a desenhar ([lat, lon][]) e duração/distância de cada trecho.
  */
+const cacheTrajetos = new Map(); // só em memória: alternar ida/volta não repete a consulta
+
 export async function tracarRota(pontos) {
-  const data = await chamarBackend("/rotas/trajeto", { pontos });
-  return { linha: decodificarPolyline(data.polyline), trechos: data.trechos };
+  const chave = pontos.map(chavePonto).join("|");
+  if (!cacheTrajetos.has(chave)) {
+    const data = await chamarBackend("/rotas/trajeto", { pontos });
+    cacheTrajetos.set(chave, { linha: decodificarPolyline(data.polyline), trechos: data.trechos });
+  }
+  return cacheTrajetos.get(chave);
 }
