@@ -133,6 +133,11 @@ function AjustarMapa({ pontos, chave }) {
 }
 
 /* ── Campo de endereço com autocomplete (Google Places) ───── */
+// Cada consulta de sugestões é cobrada pelo Google: só começa a sugerir com
+// MIN_LETRAS digitadas e depois de ESPERA_MS sem digitar.
+const MIN_LETRAS = 5;
+const ESPERA_MS = 500;
+
 function BuscaEndereco({ perto, onSelecionar, placeholder = "Digite um endereço (rua, número, cidade)…" }) {
   const places = useMapsLibrary("places");
   const [texto, setTexto] = useState("");
@@ -144,7 +149,7 @@ function BuscaEndereco({ perto, onSelecionar, placeholder = "Digite um endereço
   const consulta = useRef(0); // descarta respostas de buscas antigas
 
   useEffect(() => {
-    if (!places || texto.trim().length < 3) {
+    if (!places || texto.trim().length < MIN_LETRAS) {
       setSugestoes([]);
       return;
     }
@@ -174,7 +179,7 @@ function BuscaEndereco({ perto, onSelecionar, placeholder = "Digite um endereço
       } finally {
         if (minha === consulta.current) setCarregando(false);
       }
-    }, 300);
+    }, ESPERA_MS);
     return () => clearTimeout(t);
   }, [texto, perto, places]);
 
