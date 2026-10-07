@@ -34,6 +34,8 @@ class ServicoCreate(BaseModel):
     status: str = "pendente"
     is_pacote: bool = False
     tipo_cobranca: str = "diaria"  # "diaria" ou "periodo"
+    # Override manual de dias efetivos para cálculo quando tipo_cobranca="diaria"
+    numero_diarias_efetivos: Optional[int] = None
 
     equipamentos: Optional[List[ServicoEquipamentoIn]] = None
 
@@ -56,6 +58,7 @@ class ServicoOut(BaseModel):
     valor_pendente_atual: float
     is_pacote: bool
     tipo_cobranca: str
+    numero_diarias_efetivos: Optional[int]
 
     servico_equipamentos: List[ServicoEquipamentoOut] = []
 

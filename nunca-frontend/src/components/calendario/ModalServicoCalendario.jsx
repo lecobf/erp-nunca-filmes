@@ -84,6 +84,7 @@ const formVazio = (dataInicial) => ({
   equipamentos: [],
   is_pacote: false,
   tipo_cobranca: "diaria",  // "diaria" ou "periodo"
+  numero_diarias_efetivos: null,  // null = usa datas.length; número = override manual
 });
 
 /**
@@ -108,6 +109,8 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
   const [modalEquipOpen, setModalEquipOpen] = useState(false);
   const [orcamentoAberto, setOrcamentoAberto] = useState(false);
   const [carregando, setCarregando] = useState(false);
+  // Indica se o usuário ajustou manualmente os dias de uso (para exibir aviso)
+  const [diasManual, setDiasManual] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -141,31 +144,38 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
             status: s.status || "pendente",
             is_pacote: !!s.is_pacote,
             tipo_cobranca: s.tipo_cobranca || "diaria",
+            numero_diarias_efetivos: s.numero_diarias_efetivos ?? null,
           });
+          // Marca como manual se havia um override salvo
+          setDiasManual(s.numero_diarias_efetivos != null);
         })
         .finally(() => setCarregando(false));
     } else {
       setForm(formVazio(dataInicial));
+      setDiasManual(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, servicoId, dataInicial]);
 
-  // Recalcula totais sempre que mudar cachê, equipamentos, datas, desconto ou tipo de cobrança
+  // Recalcula totais sempre que mudar cachê, equipamentos, datas, desconto, tipo de cobrança ou dias efetivos
   useEffect(() => {
-    const nDiarias = (form.datas || []).length || 1;
+    const nDatasCalendario = (form.datas || []).length || 1;
+    // "diaria": usa dias efetivos se definido manualmente, senão usa total de datas; "periodo": ignora contagem
+    const nDiarias = form.tipo_cobranca === "diaria"
+      ? (form.numero_diarias_efetivos ?? nDatasCalendario)
+      : nDatasCalendario;
     const cache = Number(form.valor_diaria_cache) || 0;
     const equip = Number(form.valor_diaria_equipamentos) || 0;
-    // "diaria": multiplica pelo número de diárias; "periodo": valor único pelo período
     const total = form.tipo_cobranca === "periodo"
       ? cache + equip
-      : (cache + equip) * nDiarias;
+      : (cache + equip) * (nDiarias || 1);
     setForm((prev) => ({
       ...prev,
       valor_total: total,
       valor_final: Math.max(0, total - Number(prev.valor_desconto || 0)),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.valor_diaria_cache, form.valor_diaria_equipamentos, form.datas?.length, form.valor_desconto, form.tipo_cobranca]);
+  }, [form.valor_diaria_cache, form.valor_diaria_equipamentos, form.datas?.length, form.valor_desconto, form.tipo_cobranca, form.numero_diarias_efetivos]);
 
   function adicionarData(d) {
     if (!d) return;
@@ -258,6 +268,10 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
         status: form.status || "pendente",
         is_pacote: !!form.is_pacote,
         tipo_cobranca: form.tipo_cobranca || "diaria",
+        // Só envia dias efetivos quando "por diária" e há um override manual
+        numero_diarias_efetivos: (form.tipo_cobranca === "diaria" && form.numero_diarias_efetivos != null)
+          ? form.numero_diarias_efetivos
+          : null,
         equipamentos: form.is_pacote ? [] : mappedEquipamentos,
       };
       if (modoEdicao) {
@@ -399,9 +413,47 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
                   onChange={(d) => { if (d) adicionarData(d); setNovaData(""); }}
                 />
               </div>
-              <span className="text-neutral-400">
-                {(form.datas || []).length} {(form.datas || []).length === 1 ? "diária" : "diárias"}
-              </span>
+              {/* Contador de datas + campo "Dias de uso" (visível apenas em "Por Diária") */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-400">
+                <span>
+                  {(form.datas || []).length} {(form.datas || []).length === 1 ? "data no calendário" : "datas no calendário"}
+                </span>
+                {form.tipo_cobranca === "diaria" && (
+                  <>
+                    <span>·</span>
+                    <label className="flex items-center gap-1.5 font-normal text-neutral-500">
+                      Dias de uso:
+                      <input
+                        type="number"
+                        min={1}
+                        max={9999}
+                        value={form.numero_diarias_efetivos ?? (form.datas || []).length || 1}
+                        onChange={(e) => {
+                          const v = Math.max(1, Number(e.target.value) || 1);
+                          setDiasManual(true);
+                          setForm((prev) => ({ ...prev, numero_diarias_efetivos: v }));
+                        }}
+                        className="w-14 border border-neutral-300 rounded px-1.5 py-0.5 text-xs text-neutral-700 text-right"
+                      />
+                    </label>
+                    {diasManual && (
+                      <span className="flex items-center gap-1 text-amber-500">
+                        ⚠ ajustado manualmente ·{" "}
+                        <button
+                          type="button"
+                          className="underline hover:text-amber-700"
+                          onClick={() => {
+                            setDiasManual(false);
+                            setForm((prev) => ({ ...prev, numero_diarias_efetivos: null }));
+                          }}
+                        >
+                          recalcular
+                        </button>
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             <label className="col-span-12 flex flex-col gap-1 text-xs font-medium text-neutral-600">
@@ -508,7 +560,13 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
       <ModalOrcamento
         isOpen={orcamentoAberto}
         onClose={() => setOrcamentoAberto(false)}
-        formData={{ ...form, numero_diarias: (form.datas || []).length || 1 }}
+        formData={{
+          ...form,
+          // Usa dias efetivos no orçamento quando há override manual em modo "por diária"
+          numero_diarias: (form.numero_diarias_efetivos != null && form.tipo_cobranca === "diaria")
+            ? form.numero_diarias_efetivos
+            : (form.datas || []).length || 1,
+        }}
         clientes={clientes}
       />
 

@@ -27,6 +27,8 @@ class Servico(Base):
     is_pacote = Column(Boolean, nullable=False, default=False)
     # "diaria" = (cache + equip) × nDiarias  |  "periodo" = cache + equip (valor único pelo período)
     tipo_cobranca = Column(String, nullable=False, default="diaria")
+    # Substituição manual do número de diárias para cálculo (ex: escala 5:2 em um período de 14 dias)
+    numero_diarias_efetivos = Column(Integer, nullable=True, default=None)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
     cliente = relationship("Cliente", back_populates="servicos")

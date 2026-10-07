@@ -193,7 +193,8 @@ def criar_servico(
     current_user_id: int = Depends(get_current_user_id),
 ):
     datas = sorted(payload.datas or [])
-    numero_diarias = max(len(datas), 1)
+    # Usa dias efetivos quando fornecido (override manual); caso contrário usa len(datas)
+    numero_diarias = payload.numero_diarias_efetivos if payload.numero_diarias_efetivos else max(len(datas), 1)
     data_contratacao = datas[0] if datas else datetime.date.today()
 
     data_prev = payload.data_previsao_pagamento or _default_previsao_pagamento(data_contratacao)
@@ -221,6 +222,7 @@ def criar_servico(
         status="pendente",
         is_pacote=payload.is_pacote,
         tipo_cobranca=payload.tipo_cobranca,
+        numero_diarias_efetivos=payload.numero_diarias_efetivos,
         valor_pendente_atual=valor_final,
         usuario_id=current_user_id,
     )
@@ -255,6 +257,7 @@ def criar_servico(
         "valor_pendente_atual": s.valor_pendente_atual,
         "is_pacote": s.is_pacote,
         "tipo_cobranca": s.tipo_cobranca,
+        "numero_diarias_efetivos": s.numero_diarias_efetivos,
     }
 
 
@@ -271,7 +274,8 @@ def atualizar_servico(
         raise HTTPException(status_code=404, detail="Serviço não encontrado")
 
     datas = sorted(payload.datas or [])
-    numero_diarias = max(len(datas), 1)
+    # Usa dias efetivos quando fornecido (override manual); caso contrário usa len(datas)
+    numero_diarias = payload.numero_diarias_efetivos if payload.numero_diarias_efetivos else max(len(datas), 1)
     data_contratacao = datas[0] if datas else s.data_contratacao
 
     vd_equip_calc, valor_total, itens = _aplicar_regras_e_calcular(
@@ -295,6 +299,7 @@ def atualizar_servico(
     s.data_previsao_pagamento = payload.data_previsao_pagamento or _default_previsao_pagamento(data_contratacao)
     s.is_pacote = payload.is_pacote
     s.tipo_cobranca = payload.tipo_cobranca
+    s.numero_diarias_efetivos = payload.numero_diarias_efetivos
 
     if payload.equipamentos is not None:
         db.query(ServicoEquipamento).filter(ServicoEquipamento.servico_id == s.id).delete()
@@ -325,6 +330,7 @@ def atualizar_servico(
         "valor_pendente_atual": s.valor_pendente_atual,
         "is_pacote": s.is_pacote,
         "tipo_cobranca": s.tipo_cobranca,
+        "numero_diarias_efetivos": s.numero_diarias_efetivos,
     }
 
 
@@ -563,4 +569,5 @@ def obter_servico(
         "equipamentos": equipamentos,
         "is_pacote": s.is_pacote,
         "tipo_cobranca": s.tipo_cobranca,
+        "numero_diarias_efetivos": s.numero_diarias_efetivos,
     }
