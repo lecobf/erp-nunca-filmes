@@ -4,8 +4,9 @@ import Modal from "../Modal";
 import CurrencyInput from "../CurrencyInput";
 import DateInput from "../DateInput";
 import { fmtBRL, fmtDateBR } from "../../utils/formatters";
-import { X, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Trash2, Printer, ChevronDown, ChevronUp } from "lucide-react";
 import ModalEquipamentos from "../servicos/ModalEquipamentos";
+import ModalOrcamento from "../servicos/ModalOrcamento";
 
 function DateChip({ date, onRemove }) {
   return (
@@ -105,6 +106,7 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
   const [periodoInicio, setPeriodoInicio] = useState("");
   const [periodoFim, setPeriodoFim] = useState("");
   const [modalEquipOpen, setModalEquipOpen] = useState(false);
+  const [orcamentoAberto, setOrcamentoAberto] = useState(false);
   const [carregando, setCarregando] = useState(false);
 
   useEffect(() => {
@@ -459,11 +461,21 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
               <input type="text" readOnly className="w-full bg-neutral-50" value={fmtBRL(form.valor_final)} />
             </label>
 
-            <label className="col-span-6 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
+            <div className="col-span-6 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
               Previsão Pgto
-              <DateInput value={form.data_previsao_pagamento || ""}
-                onChange={(d) => setForm((prev) => ({ ...prev, data_previsao_pagamento: d }))} />
-            </label>
+              <div className="flex items-center gap-1.5">
+                <DateInput value={form.data_previsao_pagamento || ""}
+                  onChange={(d) => setForm((prev) => ({ ...prev, data_previsao_pagamento: d }))} />
+                <button
+                  type="button"
+                  onClick={() => setOrcamentoAberto(true)}
+                  title="Visualizar Orçamento"
+                  className="h-8 w-8 flex items-center justify-center rounded border border-neutral-300 text-neutral-500 hover:bg-neutral-100 hover:text-primary-600 transition-colors shrink-0"
+                >
+                  <Printer size={14} />
+                </button>
+              </div>
+            </div>
 
             {modoEdicao && (
               <label className="col-span-6 md:col-span-4 flex flex-col gap-1 text-xs font-medium text-neutral-600">
@@ -492,6 +504,13 @@ export default function ModalServicoCalendario({ isOpen, servicoId, dataInicial,
           </div>
         )}
       </Modal>
+
+      <ModalOrcamento
+        isOpen={orcamentoAberto}
+        onClose={() => setOrcamentoAberto(false)}
+        formData={{ ...form, numero_diarias: (form.datas || []).length || 1 }}
+        clientes={clientes}
+      />
 
       {modalEquipOpen && (
         <ModalEquipamentos isOpen={modalEquipOpen} onClose={() => setModalEquipOpen(false)}
